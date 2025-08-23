@@ -3,7 +3,7 @@ import path from 'path';
 import ignore from 'ignore';
 
 // load .gitignore, .secretignore if present and accept extra patterns
-export async function loadIgnorePatterns(startDir: string, extraPatterns?: string[]): Promise<ignore.Ignore> {
+export async function loadIgnorePatterns(startDir: string, extraPatterns?: string[]): Promise<any> {
   const ig = ignore();
   const files = ['.gitignore', '.secretignore'];
   for (const f of files) {
