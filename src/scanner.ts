@@ -6,14 +6,14 @@ import { loadPatterns } from "./config";
 
 async function loadSecretRegexes() {
   const defs = await loadPatterns();
-  if (defs.length > 0) {
-    return defs.map((d) => ({ name: d.name, re: new RegExp(d.regex, 'g') }));
-  }
-  return [
+  const builtins = [
     { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
     { name: "Generic API Key", re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
     { name: "JWT-Like", re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
   ];
+  if (defs.length === 0) return builtins;
+  const custom = defs.map((d) => ({ name: d.name, re: new RegExp(d.regex, 'g') }));
+  return builtins.concat(custom);
 }
 
 export async function scanPath(targetPath: string): Promise<Finding[]> {
