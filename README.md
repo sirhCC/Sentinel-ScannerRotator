@@ -28,6 +28,10 @@ API
 - `src/scanner.ts` - scanner that finds secrets
 - `src/rotators` - rotator implementations (dry-run, apply)
 
+Warning
+
+This tool can mutate files when run with `--rotator apply`. Always run with `--dry-run` first and use `--force` to confirm destructive changes. See `SECURITY.md` for more details.
+
 Tests
 
 ```powershell
