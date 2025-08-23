@@ -1,1 +1,7 @@
-{"patterns":[{"name":"TEST","regex":"MYSECRET_[A-Z]+"}]}
+{
+	"patterns": [
+		{ "name": "AWS Access Key ID", "regex": "AKIA[0-9A-Z]{16}" },
+		{ "name": "Generic API Key", "regex": "(?:api_key|apikey|api-key)\\s*[:=]\\s*['\\\"]?([A-Za-z0-9-_]{16,})" },
+		{ "name": "JWT-Like", "regex": "eyJ[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+" }
+	]
+}
