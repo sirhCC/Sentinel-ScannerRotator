@@ -7,12 +7,15 @@ This file is a single, ordered list of work to do for the project. Highest prior
 ## P0 — Immediate (blockers/security/critical correctness)
 
 1. Make scanner recursive and respect ignore patterns (e.g., .gitignore) — implement fast, tested recursion with optional depth and a default ignore list. (Owner: TBD)
+	- [DONE 2025-08-23] Implemented recursive scanning and `.gitignore` support; added `src/ignore.ts`, updated `src/scanner.ts`, and `test/scan-recursive.test.ts` (tests passing).
 2. Add safe-file-update strategy for `apply` rotator: create per-file backup, atomic replace (write temp -> rename), and rollback on error. Critical for safety.
 3. Add CLI flag `--dry-run` and ensure `--rotator apply` requires an explicit `--force` confirmation in non-interactive runs (or env var).
 4. Harden regexes and allow configurable rules: move patterns to `config/defaults.json` with ability to load user config.
 5. Add logging with levels (error, warn, info, debug) and structured JSON output option for automation/CI.
 6. Add Node type support and fix any missing type errors (ensure `@types/node` is installed and tsconfig configured).
+	- [DONE 2025-08-23] Added `@types/node` to devDependencies and resolved type issues needed to compile and run tests.
 7. Add unit tests for core behaviors: recursive scanning, pattern matching, and safe apply; ensure CI can run tests headless.
+	- [PARTIAL 2025-08-23] Added unit tests for scanner (`test/scanner.test.ts`) and recursive ignore behavior (`test/scan-recursive.test.ts`). Tests run headless via `vitest run`. Safe-apply tests still pending.
 8. Add e2e test harness that runs against a temporary repo (creates files, runs scanner with both rotators, verifies outcomes).
 9. Add license and security policy (SECURITY.md) and update README with clear warnings about `apply`.
 
