@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { Finding } from "./types";
+import { loadIgnorePatterns } from "./ignore";
 
 const SECRET_REGEXES: { name: string; re: RegExp }[] = [
   { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
@@ -12,20 +13,29 @@ export async function scanPath(targetPath: string): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
   if (stats.isFile()) return scanFile(targetPath);
 
-  const files = await fs.readdir(targetPath);
+  const ig = await loadIgnorePatterns(targetPath);
   const results: Finding[] = [];
-  for (const f of files) {
-    const full = path.join(targetPath, f);
-    try {
-      const s = await fs.stat(full);
-      if (s.isDirectory()) continue; // skip directories
-      const r = await scanFile(full);
-      results.push(...r);
-    } catch (e) {
-      // ignore
+  await walkDir(targetPath, ig, results);
+  return results;
+}
+
+async function walkDir(dir: string, ig: import('ignore').Ignore, results: Finding[]) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    const rel = path.relative(process.cwd(), full);
+    if (ig.ignores(rel)) continue;
+    if (e.isDirectory()) {
+      await walkDir(full, ig, results);
+    } else if (e.isFile()) {
+      try {
+        const r = await scanFile(full);
+        results.push(...r);
+      } catch (e) {
+        // ignore read errors
+      }
     }
   }
-  return results;
 }
 
 export async function scanFile(filePath: string): Promise<Finding[]> {
