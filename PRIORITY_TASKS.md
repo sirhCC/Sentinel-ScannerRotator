@@ -56,14 +56,3 @@ This file is a single, ordered list of work to do for the project. Highest prior
 33. Add language-specific detectors and false-positive suppression heuristics.
 
 ---
-
-Notes and conventions
-
-- Mark an item "IN-PROGRESS" or assign an owner when work begins. Move completed items to a `DONE` section or close via PR.
-- Keep P0 strictly small and focused; do not start P1 until P0 tests pass in CI.
-- For every change that mutates files, add a unit test plus an e2e test that verifies backup/atomic replace/rollback.
-- Use semantic commits and small PRs; each PR should reference the task number from this list.
-
-Next action
-
-- Confirm you want this file name and ordering. I can immediately start the top P0 item (implement recursive scanning + .gitignore support) and open a PR with tests.
