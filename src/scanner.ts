@@ -1,0 +1,52 @@
+import fs from "fs/promises";
+import path from "path";
+import { Finding } from "./types";
+
+const SECRET_REGEXES: { name: string; re: RegExp }[] = [
+  { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
+  { name: "Generic API Key", re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
+  { name: "JWT-Like", re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
+];
+
+export async function scanPath(targetPath: string): Promise<Finding[]> {
+  const stats = await fs.stat(targetPath);
+  if (stats.isFile()) return scanFile(targetPath);
+
+  const files = await fs.readdir(targetPath);
+  const results: Finding[] = [];
+  for (const f of files) {
+    const full = path.join(targetPath, f);
+    try {
+      const s = await fs.stat(full);
+      if (s.isDirectory()) continue; // skip directories
+      const r = await scanFile(full);
+      results.push(...r);
+    } catch (e) {
+      // ignore
+    }
+  }
+  return results;
+}
+
+export async function scanFile(filePath: string): Promise<Finding[]> {
+  const content = await fs.readFile(filePath, "utf8");
+  const lines = content.split(/\r?\n/);
+  const findings: Finding[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (const s of SECRET_REGEXES) {
+      let m: RegExpExecArray | null;
+      const re = new RegExp(s.re.source, s.re.flags);
+      while ((m = re.exec(line)) !== null) {
+        findings.push({
+          filePath,
+          line: i + 1,
+          column: m.index + 1,
+          match: m[0],
+          context: line.trim().slice(0, 200),
+        });
+      }
+    }
+  }
+  return findings;
+}
