@@ -2,18 +2,26 @@ import fs from "fs/promises";
 import path from "path";
 import { Finding } from "./types";
 import { loadIgnorePatterns } from "./ignore";
+import { loadPatterns } from "./config";
 
-const SECRET_REGEXES: { name: string; re: RegExp }[] = [
-  { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
-  { name: "Generic API Key", re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
-  { name: "JWT-Like", re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
-];
+async function loadSecretRegexes() {
+  const defs = await loadPatterns();
+  if (defs.length > 0) {
+    return defs.map((d) => ({ name: d.name, re: new RegExp(d.regex, 'g') }));
+  }
+  return [
+    { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
+    { name: "Generic API Key", re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
+    { name: "JWT-Like", re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
+  ];
+}
 
 export async function scanPath(targetPath: string): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
   if (stats.isFile()) return scanFile(targetPath);
 
   const ig = await loadIgnorePatterns(targetPath);
+  const SECRET_REGEXES = await loadSecretRegexes();
   const results: Finding[] = [];
   await walkDir(targetPath, ig, results);
   return results;
@@ -29,7 +37,7 @@ async function walkDir(dir: string, ig: import('ignore').Ignore, results: Findin
       await walkDir(full, ig, results);
     } else if (e.isFile()) {
       try {
-        const r = await scanFile(full);
+  const r = await scanFile(full);
         results.push(...r);
       } catch (e) {
         // ignore read errors
@@ -39,6 +47,7 @@ async function walkDir(dir: string, ig: import('ignore').Ignore, results: Findin
 }
 
 export async function scanFile(filePath: string): Promise<Finding[]> {
+  const SECRET_REGEXES = await loadSecretRegexes();
   const content = await fs.readFile(filePath, "utf8");
   const lines = content.split(/\r?\n/);
   const findings: Finding[] = [];
