@@ -16,11 +16,11 @@ async function loadSecretRegexes() {
   return builtins.concat(custom);
 }
 
-export async function scanPath(targetPath: string): Promise<Finding[]> {
+export async function scanPath(targetPath: string, extraIg?: string[]): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
   if (stats.isFile()) return scanFile(targetPath);
 
-  const ig = await loadIgnorePatterns(targetPath);
+  const ig = await loadIgnorePatterns(targetPath, extraIg);
   const SECRET_REGEXES = await loadSecretRegexes();
   const results: Finding[] = [];
   await walkDir(targetPath, ig, results);
