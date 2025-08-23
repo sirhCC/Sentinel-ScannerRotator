@@ -20,6 +20,11 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (rIndex >= 0 && args[rIndex + 1]) opts.rotator = args[rIndex + 1];
   if (args.includes("--dry-run")) opts.dryRun = true;
   if (args.includes("--force")) opts.force = true;
+  // collect --ignore <pattern> occurrences
+  const extraIg: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--ignore' && args[i+1]) { extraIg.push(args[i+1]); i++; }
+  }
   const jsonLog = args.includes('--log-json');
   const levelIndex = args.indexOf('--log-level');
   const level = levelIndex >= 0 && args[levelIndex + 1] ? args[levelIndex + 1] as any : 'info';
@@ -38,7 +43,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
     return 3;
   }
 
-  const findings = await scanPath(opts.target);
+  const findings = await scanPath(opts.target, extraIg);
   logger.info(`Found ${findings.length} findings.`);
   for (const f of findings) {
     const res = await rotator.rotate(f, { dryRun: opts.dryRun || rotator.name === "dry-run" });
