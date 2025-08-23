@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scanFile } from '../src/scanner';
+import { loadPatterns } from '../src/config';
 import fs from 'fs';
 
 describe('scanner', () => {
@@ -7,6 +8,10 @@ describe('scanner', () => {
     const tmp = 'test-sample.txt';
   fs.writeFileSync(tmp, 'here is a key AKIAABCDEFGHIJKLMNOP in a file');
     const res = await scanFile(tmp);
+    if (res.length === 0) {
+      const p = await loadPatterns();
+      console.error('DEBUG: loaded patterns ->', p);
+    }
     fs.unlinkSync(tmp);
     expect(res.length).toBeGreaterThan(0);
     expect(res[0].match).toContain('AKIA');
