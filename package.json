@@ -20,6 +20,7 @@
     "@types/node": "^20.3.1"
   },
   "dependencies": {
-    "ignore": "^5.2.0"
+  "ignore": "^5.2.0",
+  "js-yaml": "^4.1.0"
   }
 }
