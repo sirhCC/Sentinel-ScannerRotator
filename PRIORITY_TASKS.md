@@ -24,45 +24,48 @@ This file is a single, ordered list of work to do for the project. Highest prior
 	- [DONE 2025-08-23] Added `test/e2e.test.ts` which runs dry-run and apply against a temporary repo and verifies backups.
 9. Add license and security policy (SECURITY.md) and update README with clear warnings about `apply`.
 	- [DONE 2025-08-23] Added `LICENSE` (MIT), `SECURITY.md`, and README warning about `apply`.
-	- [TODO]
+	- [DONE 2025-08-23] Verified README contains explicit warning and guidance for `apply` usage.
 
 ## P1 — High (release-readiness features)
 
-10. Implement ignore config parsing: support `.gitignore`, `.secretignore`, and CLI `--ignore` globs.
+1. Implement ignore config parsing: support `.gitignore`, `.secretignore`, and CLI `--ignore` globs.
 	- [DONE 2025-08-23] Implemented `src/ignore.ts`, CLI `--ignore` support, and tests `test/ignore.test.ts`.
-11. Add configuration file support (YAML/JSON) to allow customizing regexes, rotators, dry-run defaults, and exclude lists.
+2. Add configuration file support (YAML/JSON) to allow customizing regexes, rotators, dry-run defaults, and exclude lists.
 	- [DONE 2025-08-23] Added runtime YAML/JSON loader in `src/config.ts` (supports `.secretsentinel.yaml` and `.secretsentinel.json`), added tests `test/config-file.test.ts`.
-12. Improve `apply` rotator: support templated replacement or rotate to a secret manager (plugin points) rather than simple placeholder.
-13. Add pluggable rotator interface and loader from `rotators/` directory (dynamic import), and doc for writing new rotators.
+3. Improve `apply` rotator: support templated replacement or rotate to a secret manager (plugin points) rather than simple placeholder.
+4. Add pluggable rotator interface and loader from `rotators/` directory (dynamic import), and doc for writing new rotators.
 	- [DONE 2025-08-23] Implemented dynamic loader `src/rotators/loader.ts`, wired CLI to load rotators and added `--rotators-dir` support, tests and README notes added.
-14. Add unit tests for rotator implementations, including failure modes (write permission errors, partial replacements).
-15. Add comprehensive CLI help (`--help`) and validate flags with a parsing library (yargs/commander/zod for validation).
-16. Add package scripts for linting and formatting and include ESLint + Prettier; enforce in CI.
-17. Add proper CI pipeline (GitHub Actions): install, lint, build, test, security scan, and package step.
+5. Add unit tests for rotator implementations, including failure modes (write permission errors, partial replacements).
+6. Add comprehensive CLI help (`--help`) and validate flags with a parsing library (yargs/commander/zod for validation).
+	- [DONE 2025-08-23] Migrated to Commander with detailed help and short flags; added `--list-rotators` for discoverability and tests for it.
+7. Add package scripts for linting and formatting and include ESLint + Prettier; enforce in CI.
+	- [DONE 2025-08-23] Added ESLint v9 flat config and Prettier; wired npm scripts (lint/format) and resolved warnings.
+8. Add proper CI pipeline (GitHub Actions): install, lint, build, test, security scan, and package step.
+	- [DONE 2025-08-23] Added CI workflow to install, lint, build, and test on push/PR to main. Security scan/package can be added later as separate jobs.
 
 ## P2 — Medium (integrations, UX, safety)
 
-18. Rotator integrations: implement connectors for at least one secret backend (e.g., AWS Secrets Manager or Vault) as an example `apply` rotator.
-19. Add interactive mode for review: show findings in an interactive TUI (fuzzy-select) to approve per-finding rotations.
-20. Add permissions and dry-run audit logs: produce a signed audit artifact describing changes that would be made and what was changed when applied.
-21. Add concurrent scanning and rotator throttling for performance on large repos (worker pool size, rate-limiting rotator calls).
-22. Add an option to persist findings to an output format (JSON/CSV) for integrations with ticketing/alerting.
-23. Add caching to avoid re-scanning unchanged files (file mtime + hash cache) to speed repeated runs.
+1. Rotator integrations: implement connectors for at least one secret backend (e.g., AWS Secrets Manager or Vault) as an example `apply` rotator.
+2. Add interactive mode for review: show findings in an interactive TUI (fuzzy-select) to approve per-finding rotations.
+3. Add permissions and dry-run audit logs: produce a signed audit artifact describing changes that would be made and what was changed when applied.
+4. Add concurrent scanning and rotator throttling for performance on large repos (worker pool size, rate-limiting rotator calls).
+5. Add an option to persist findings to an output format (JSON/CSV) for integrations with ticketing/alerting.
+6. Add caching to avoid re-scanning unchanged files (file mtime + hash cache) to speed repeated runs.
 
 ## P3 — Lower priority (polish & enterprise features)
 
-24. Add ruleset library and rule marketplace (curated regexes, entropy checks, ML model hook) — long-term.
-25. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
-26. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
-27. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
-28. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
+1. Add ruleset library and rule marketplace (curated regexes, entropy checks, ML model hook) — long-term.
+2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
+3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
+4. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
+5. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
 
 ## Nice-to-have / Wish list
 
-29. Add a Git pre-commit hook installer that runs the scanner on staged files (fast path) and blocks commits that match high-severity rules.
-30. Add VS Code extension for inline secret finding and quick rotate suggestions.
-31. Add an API server mode for remote scanning and rotator orchestration (requires auth and RBAC).
-32. Add a web UI for triaging findings and delegating rotations to teams.
-33. Add language-specific detectors and false-positive suppression heuristics.
+1. Add a Git pre-commit hook installer that runs the scanner on staged files (fast path) and blocks commits that match high-severity rules.
+2. Add VS Code extension for inline secret finding and quick rotate suggestions.
+3. Add an API server mode for remote scanning and rotator orchestration (requires auth and RBAC).
+4. Add a web UI for triaging findings and delegating rotations to teams.
+5. Add language-specific detectors and false-positive suppression heuristics.
 
 ---
