@@ -57,7 +57,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   }
   const jsonLog = args.includes('--log-json');
   const levelIndex = args.indexOf('--log-level');
-  const level = levelIndex >= 0 && args[levelIndex + 1] ? args[levelIndex + 1] as any : 'info';
+  const level = levelIndex >= 0 && args[levelIndex + 1] ? (args[levelIndex + 1] as any) : 'info';
   const logger = createLogger({ json: jsonLog, level });
 
   // Load rotators dynamically
