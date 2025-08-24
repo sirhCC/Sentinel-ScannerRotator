@@ -33,4 +33,19 @@ describe('cli', () => {
     try { fs.rmdirSync(repo, { recursive: true }); } catch {}
     expect(code).toBe(0);
   });
+
+  it('loads a custom rotator via --rotators-dir and selects it', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const repo = 'tmp-cli-rot';
+    const plug = 'tmp-cli-plugins';
+    try { fs.mkdirSync(repo); } catch {}
+    try { fs.mkdirSync(plug); } catch {}
+    const rfile = path.join(plug, 'customRotator.js');
+    fs.writeFileSync(rfile, `export const custom = { name: 'custom', async rotate() { return { success: true, message: 'custom' }; } };`);
+    const code = await runCli([repo, '--rotators-dir', plug, '--rotator', 'custom', '--dry-run']);
+    try { fs.rmSync(repo, { recursive: true }); } catch {}
+    try { fs.rmSync(plug, { recursive: true }); } catch {}
+    expect(code).toBe(0);
+  });
 });
