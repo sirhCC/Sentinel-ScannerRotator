@@ -5,8 +5,9 @@ import fs from 'fs';
 describe('apply rotator safeUpdate', () => {
   it('replaces content and creates backup', async () => {
     const tmp = 'tmp-apply.txt';
-  // ensure no stale tmp dir/file from other tests
+  // ensure no stale tmp dir/file from other tests and prepare writable tmp dir
   try { fs.rmSync('.sentinel_tmp', { recursive: true, force: true }); } catch (_) {}
+  try { fs.mkdirSync('.sentinel_tmp', { recursive: true }); } catch (_) {}
   fs.writeFileSync(tmp, 'secret AKIAABCDEFGHIJKLMNOP end');
     const findings = [{ filePath: tmp, line: 1, column: 8, match: 'AKIAABCDEFGHIJKLMNOP' }];
     const res = await applyRotator.rotate(findings[0] as any);
