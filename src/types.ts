@@ -8,5 +8,8 @@ export type Finding = {
 
 export interface Rotator {
   name: string;
-  rotate(finding: Finding, options?: { dryRun?: boolean }): Promise<{ success: boolean; message?: string }>;
+  rotate(
+    finding: Finding,
+    options?: { dryRun?: boolean; template?: string }
+  ): Promise<{ success: boolean; message?: string }>;
 }
