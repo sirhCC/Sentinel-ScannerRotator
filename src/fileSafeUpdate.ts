@@ -36,9 +36,9 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
       try {
         await fs.copyFile(tmpPath, filePath);
         try { await fs.unlink(tmpPath); } catch {}
-      } catch (copyErr) {
-        throw renameErr;
-      }
+      } catch {
+          throw renameErr;
+        }
     }
     return { success: true, backupPath };
   } catch (e: any) {
