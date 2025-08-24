@@ -75,3 +75,7 @@ CLI config flag
 
 - Use `--config <path>` to point the CLI at a specific config file or directory. If a file is provided, its directory is used as the base for config lookup.
 
+Custom rotators
+
+- The CLI discovers rotators in `src/rotators/` (built-ins) and can also load custom rotators from additional directories via `--rotators-dir <dir>` (repeatable). A rotator must export an object with `name: string` and `rotate(finding, options?) => Promise<{ success: boolean; message?: string }>`.
+
