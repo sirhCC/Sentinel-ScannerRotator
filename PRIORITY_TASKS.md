@@ -34,6 +34,7 @@ This file is a single, ordered list of work to do for the project. Highest prior
 	- [DONE 2025-08-23] Added runtime YAML/JSON loader in `src/config.ts` (supports `.secretsentinel.yaml` and `.secretsentinel.json`), added tests `test/config-file.test.ts`.
 12. Improve `apply` rotator: support templated replacement or rotate to a secret manager (plugin points) rather than simple placeholder.
 13. Add pluggable rotator interface and loader from `rotators/` directory (dynamic import), and doc for writing new rotators.
+	- [DONE 2025-08-23] Implemented dynamic loader `src/rotators/loader.ts`, wired CLI to load rotators and added `--rotators-dir` support, tests and README notes added.
 14. Add unit tests for rotator implementations, including failure modes (write permission errors, partial replacements).
 15. Add comprehensive CLI help (`--help`) and validate flags with a parsing library (yargs/commander/zod for validation).
 16. Add package scripts for linting and formatting and include ESLint + Prettier; enforce in CI.
