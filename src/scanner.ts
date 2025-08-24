@@ -23,11 +23,16 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
 
   const ig = await loadIgnorePatterns(targetPath, extraIg);
   const results: Finding[] = [];
-  await walkDir(targetPath, ig as any, results, baseDir);
+  await walkDir(targetPath, ig as { ignores: (p: string) => boolean }, results, baseDir);
   return results;
 }
 
-async function walkDir(dir: string, ig: any, results: Finding[], baseDir: string) {
+async function walkDir(
+  dir: string,
+  ig: { ignores: (p: string) => boolean },
+  results: Finding[],
+  baseDir: string,
+) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
@@ -37,9 +42,9 @@ async function walkDir(dir: string, ig: any, results: Finding[], baseDir: string
       await walkDir(full, ig, results, baseDir);
     } else if (e.isFile()) {
       try {
-  const r = await scanFile(full, baseDir);
+        const r = await scanFile(full, baseDir);
         results.push(...r);
-      } catch (e) {
+      } catch {
         // ignore read errors
       }
     }
