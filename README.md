@@ -23,6 +23,25 @@ npm run build
 npm start -- <path-to-scan> --rotator dry-run
 ```
 
+CLI
+
+- Help and version
+
+```powershell
+npm start -- --help
+npm start -- --version
+```
+
+- Common flags (short and long forms)
+  - `-r, --rotator <name>`: dry-run | apply
+  - `-d, --dry-run`
+  - `-f, --force`
+  - `-i, --ignore <glob...>` (repeatable)
+  - `-j, --log-json`
+  - `-l, --log-level <error|warn|info|debug>`
+  - `-c, --config <path>`
+  - `-x, --rotators-dir <dir...>` (repeatable)
+
 API
 
 - `src/scanner.ts` - scanner that finds secrets
