@@ -52,9 +52,9 @@ Example JSON config (`.secretsentinel.json`):
 
 ```json
 {
-	"patterns": [
-		{ "name": "MY_API_KEY", "regex": "MYAPI_[A-Z0-9]{16}" }
-	]
+  "patterns": [
+    { "name": "MY_API_KEY", "regex": "MYAPI_[A-Z0-9]{16}" }
+  ]
 }
 ```
 
@@ -62,8 +62,8 @@ Example YAML config (`.secretsentinel.yaml`):
 
 ```yaml
 patterns:
-	- name: MY_API_KEY
-		regex: MYAPI_[A-Z0-9]{16}
+  - name: MY_API_KEY
+    regex: MYAPI_[A-Z0-9]{16}
 ```
 
 Notes
@@ -78,4 +78,47 @@ CLI config flag
 Custom rotators
 
 - The CLI discovers rotators in `src/rotators/` (built-ins) and can also load custom rotators from additional directories via `--rotators-dir <dir>` (repeatable). A rotator must export an object with `name: string` and `rotate(finding, options?) => Promise<{ success: boolean; message?: string }>`.
+- Example: `examples/rotators/exampleRotator.js` — try it:
+
+```powershell
+npm run build
+npm start -- . --rotators-dir ./examples/rotators --rotator example --dry-run
+```
+
+Authoring custom rotators
+
+- A rotator is an object with a `name` and an async `rotate(finding, options?)` method returning `{ success, message? }`.
+- JavaScript example (export any rotator-shaped object):
+
+```js
+// plugins/rotators/myRotator.js
+export const myRotator = {
+  name: 'my-rotator',
+  async rotate(finding, options) {
+    // implement rotation
+    return { success: true, message: `handled ${finding.filePath}:${finding.line}` };
+  }
+};
+```
+
+- TypeScript example using helper types:
+
+```ts
+// plugins/rotators/myRotator.ts
+import { defineRotator, Rotator } from '../../src/rotators/schema';
+
+export const myRotator: Rotator = defineRotator({
+  name: 'my-rotator',
+  async rotate(finding, options) {
+    return { success: true, message: `handled ${finding.filePath}:${finding.line}` };
+  },
+});
+```
+
+- Run with your rotator directory:
+
+```powershell
+npm start -- . --rotators-dir ./plugins/rotators --rotator my-rotator --dry-run
+```
+
 
