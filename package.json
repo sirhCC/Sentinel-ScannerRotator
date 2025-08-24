@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
   "build": "tsc -p .",
-  "start": "node dist/index.js",
-  "dev": "ts-node src/index.ts",
+  "start": "node dist/cli.js",
+  "dev": "ts-node src/cli.ts",
   "test": "vitest run"
   },
   "keywords": ["secret", "scanner", "rotator", "typescript"],

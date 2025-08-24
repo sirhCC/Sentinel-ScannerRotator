@@ -1,8 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
-import { Finding } from "./types";
-import { loadIgnorePatterns } from "./ignore";
-import { loadPatterns } from "./config";
+import { Finding } from "./types.js";
+import { loadIgnorePatterns } from "./ignore.js";
+import { loadPatterns } from "./config.js";
 
 async function loadSecretRegexes(baseDir?: string) {
   const defs = await loadPatterns(baseDir);
