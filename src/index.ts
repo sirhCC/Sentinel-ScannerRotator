@@ -58,8 +58,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   const names = Array.from(set).sort();
     if (opts.logJson) console.log(JSON.stringify({ rotators: names }));
     else {
-      console.log('Available rotators:');
-      for (const n of names) console.log(`- ${n}`);
+      console.log(`Available rotators: ${names.join(', ')}`);
     }
     return 0;
   }
