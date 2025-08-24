@@ -40,6 +40,8 @@ npm start -- --version
   - `-j, --log-json`
   - `-l, --log-level <error|warn|info|debug>`
   - `-c, --config <path>`
+  - `-L, --list-rotators` (list available rotators and exit)
+  - `-t, --template <tpl>` (apply replacement template; supports `{{match}}`, `{{timestamp}}`, `{{file}}`)
   - `-x, --rotators-dir <dir...>` (repeatable)
 
 API
@@ -55,7 +57,21 @@ Tests
 
 ```powershell
 npm test
+## Examples
+
+- List rotators
+
+```powershell
+npm start -- --list-rotators
+npm start -- --list-rotators --log-json
 ```
+
+- Apply with a template (dangerous; creates backups in `.sentinel_tmp`)
+
+```powershell
+npm start -- . --rotator apply --force --template "__MASKED_{{timestamp}}__"
+```
+
 
 
 ## Configuration
