@@ -1,7 +1,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const DEFAULT_TMP_DIR = path.join(process.cwd(), '.sentinel_tmp');
+function resolveTmpDir() {
+  const fromEnv = process.env.SENTINEL_TMP_DIR;
+  if (fromEnv && fromEnv.trim()) {
+    return path.resolve(fromEnv);
+  }
+  return path.join(process.cwd(), '.sentinel_tmp');
+}
 
 async function ensureTmpDir(dir: string) {
   try {
@@ -16,12 +22,13 @@ function sanitizeRel(rel: string) {
 }
 
 export async function safeUpdate(filePath: string, transform: (content: string) => string) {
-  await ensureTmpDir(DEFAULT_TMP_DIR);
+  const TMP_DIR = resolveTmpDir();
+  await ensureTmpDir(TMP_DIR);
   const rel = path.relative(process.cwd(), filePath) || path.basename(filePath);
   const base = sanitizeRel(rel);
   const ts = Date.now();
-  const backupPath = path.join(DEFAULT_TMP_DIR, `${base}.bak.${ts}`);
-  const tmpPath = path.join(DEFAULT_TMP_DIR, `${base}.tmp.${ts}`);
+  const backupPath = path.join(TMP_DIR, `${base}.bak.${ts}`);
+  const tmpPath = path.join(TMP_DIR, `${base}.tmp.${ts}`);
   let backupMade = false;
   try {
     const original = await fs.readFile(filePath, 'utf8');

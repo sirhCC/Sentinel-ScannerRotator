@@ -57,6 +57,8 @@ describe('cli', () => {
   it('applies with a custom template via --template', async () => {
     const fs = require('fs');
     const path = require('path');
+  const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+  process.env.SENTINEL_TMP_DIR = uniqueTmp;
     const repo = 'tmp-cli-template';
     const f = path.join(repo, 's.txt');
     try { fs.mkdirSync(repo); } catch {}
@@ -64,7 +66,8 @@ describe('cli', () => {
     const code = await runCli([repo, '--rotator', 'apply', '--force', '--template', '__CLI_{{timestamp}}__']);
     const content = fs.readFileSync(f, 'utf8');
     try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
-    try { fs.rmSync('.sentinel_tmp', { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
+  delete process.env.SENTINEL_TMP_DIR;
     expect(code).toBe(0);
     expect(content).toMatch(/__CLI_\d+__/);
   });
