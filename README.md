@@ -10,13 +10,13 @@ Quick start
 npm install
 ```
 
-2. Run in dev mode
+1. Run in dev mode
 
 ```powershell
 npm run dev -- <path-to-scan> --rotator dry-run
 ```
 
-3. Build & run
+1. Build & run
 
 ```powershell
 npm run build
@@ -70,4 +70,8 @@ Notes
 
 - If `js-yaml` is not installed in the environment, YAML parsing will be skipped and the loader will fall back to JSON/defaults.
 - By default, if a root config file exists it is used; otherwise `config/defaults.json` provides the built-in patterns. If you want a different merge behavior, tell me and I will change the loader to merge root config with defaults.
+
+CLI config flag
+
+- Use `--config <path>` to point the CLI at a specific config file or directory. If a file is provided, its directory is used as the base for config lookup.
 
