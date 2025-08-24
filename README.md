@@ -72,6 +72,24 @@ npm start -- --list-rotators --log-json
 npm start -- . --rotator apply --force --template "__MASKED_{{timestamp}}__"
 ```
 
+## Template tokens
+
+Supported tokens in `--template`:
+
+- `{{match}}` — the exact matched secret (use with care)
+- `{{timestamp}}` — `Date.now()` value
+- `{{file}}` — the file path containing the secret
+
+Examples:
+
+```powershell
+# Safer masking (timestamp + file name)
+npm start -- . --rotator apply --force --template "__MASKED_{{file}}_{{timestamp}}__"
+
+# Echo original match (not recommended unless you scrub later)
+npm start -- . --rotator apply --force --template "__REDACTED_{{match}}__"
+```
+
 
 
 ## Configuration
