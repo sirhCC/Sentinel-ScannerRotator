@@ -11,6 +11,7 @@ type CLIOptions = {
   dryRun: boolean;
   force: boolean;
   config?: string;
+  rotatorsDirs?: string[];
 };
 
 export async function runCli(argsIn: string[]): Promise<number> {
@@ -19,7 +20,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (args.includes('--help') || args.includes('-h')) {
     const usage = `SecretSentinel-ScannerRotator\n\n` +
       `Usage:\n  sentinel [target] [--rotator <dry-run|apply>] [--dry-run] [--force]\\\n` +
-      `          [--ignore <glob> ...] [--log-json] [--log-level <level>] [--config <path>] [--help]\n\n` +
+      `          [--ignore <glob> ...] [--log-json] [--log-level <level>] [--config <path>]\\\n` +
+      `          [--rotators-dir <dir> ...] [--help]\n\n` +
       `Flags:\n` +
       `  --rotator <name>   Which rotator to use (dry-run | apply). Default: dry-run.\n` +
       `  --dry-run          Do not modify files; only report actions.\n` +
@@ -27,12 +29,13 @@ export async function runCli(argsIn: string[]): Promise<number> {
       `  --ignore <glob>    Add an ignore pattern (repeatable).\n` +
       `  --log-json         Emit JSON logs.\n` +
       `  --log-level <lvl>  error | warn | info | debug. Default: info.\n` +
-      `  --config <path>    Path to a config file or directory to resolve .secretsentinel.yaml/.json.\n` +
+  `  --config <path>    Path to a config file or directory to resolve .secretsentinel.yaml/.json.\n` +
+  `  --rotators-dir <d> Additional directory to discover rotators (repeatable).\n` +
       `  --help, -h         Show this help.\n\n` +
       `Examples:\n` +
       `  sentinel . --rotator dry-run\n` +
       `  sentinel ./repo --rotator apply --force --ignore "**/*.lock" --log-json\n` +
-      `  sentinel ./repo --config ./repo/.secretsentinel.json\n`;
+  `  sentinel ./repo --config ./repo/.secretsentinel.json --rotators-dir ./plugins/rotators\n`;
     console.log(usage);
     return 0;
   }
@@ -43,6 +46,12 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (args.includes("--force")) opts.force = true;
   const cIdx = args.indexOf('--config');
   if (cIdx >= 0 && args[cIdx + 1]) opts.config = args[cIdx + 1];
+  // collect --rotators-dir <dir> occurrences
+  const rotDirs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--rotators-dir' && args[i+1]) { rotDirs.push(args[i+1]); i++; }
+  }
+  if (rotDirs.length) opts.rotatorsDirs = rotDirs;
   // collect --ignore <pattern> occurrences
   const extraIg: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -55,7 +64,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
 
   // Load rotators dynamically
   const { loadRotators } = await import('./rotators/loader.js').catch(() => import('./rotators/loader')) as any;
-  const rotators = await loadRotators();
+  const rotators = await loadRotators({ extraDirs: opts.rotatorsDirs });
   const rotator = rotators.find((r: any) => r.name === opts.rotator);
   if (!rotator) {
     logger.error(`Unknown rotator: ${opts.rotator}`);
