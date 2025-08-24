@@ -39,7 +39,12 @@ export async function loadRotators(opts: LoaderOptions = {}): Promise<Rotator[]>
     }
   }
 
-  for (const file of candidates) {
+  // Normalize and de-duplicate candidates
+  const seen = new Set<string>();
+  for (const fileRaw of candidates) {
+    const file = path.normalize(fileRaw);
+    if (seen.has(file)) continue;
+    seen.add(file);
     try {
       const mod: any = await import(pathToFileURL(file).href);
       const exportsToCheck = [mod.default, ...Object.values(mod)];

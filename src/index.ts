@@ -18,6 +18,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('-j, --log-json', 'emit JSON logs', false)
   .option('-l, --log-level <lvl>', 'error | warn | info | debug', 'info')
   .option('-c, --config <path>', 'path to a config file or directory')
+  .option('-L, --list-rotators', 'list available rotators and exit', false)
   .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators');
 
   // Add version from package.json if available
@@ -46,6 +47,18 @@ export async function runCli(argsIn: string[]): Promise<number> {
   // Load rotators dynamically
   const { loadRotators } = (await import('./rotators/loader.js')) as any;
   const rotators = await loadRotators({ extraDirs: opts.rotatorsDir });
+
+  // If requested, list available rotators and exit
+  if (opts.listRotators) {
+    const names = rotators.map((r: any) => r.name).sort();
+    if (opts.logJson) console.log(JSON.stringify({ rotators: names }));
+    else {
+      console.log('Available rotators:');
+      for (const n of names) console.log(`- ${n}`);
+    }
+    return 0;
+  }
+
   const rotator = rotators.find((r: any) => r.name === opts.rotator);
   if (!rotator) {
     logger.error(`Unknown rotator: ${opts.rotator}`);
