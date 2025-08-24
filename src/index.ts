@@ -16,6 +16,26 @@ type CLIOptions = {
 export async function runCli(argsIn: string[]): Promise<number> {
   const args = argsIn.slice();
   const opts: CLIOptions = { target: ".", rotator: "dry-run", dryRun: false, force: false };
+  if (args.includes('--help') || args.includes('-h')) {
+    const usage = `SecretSentinel-ScannerRotator\n\n` +
+      `Usage:\n  sentinel [target] [--rotator <dry-run|apply>] [--dry-run] [--force]\\\n` +
+      `          [--ignore <glob> ...] [--log-json] [--log-level <level>] [--config <path>] [--help]\n\n` +
+      `Flags:\n` +
+      `  --rotator <name>   Which rotator to use (dry-run | apply). Default: dry-run.\n` +
+      `  --dry-run          Do not modify files; only report actions.\n` +
+      `  --force            Required to run apply when not using --dry-run.\n` +
+      `  --ignore <glob>    Add an ignore pattern (repeatable).\n` +
+      `  --log-json         Emit JSON logs.\n` +
+      `  --log-level <lvl>  error | warn | info | debug. Default: info.\n` +
+      `  --config <path>    Path to a config file or directory to resolve .secretsentinel.yaml/.json.\n` +
+      `  --help, -h         Show this help.\n\n` +
+      `Examples:\n` +
+      `  sentinel . --rotator dry-run\n` +
+      `  sentinel ./repo --rotator apply --force --ignore "**/*.lock" --log-json\n` +
+      `  sentinel ./repo --config ./repo/.secretsentinel.json\n`;
+    console.log(usage);
+    return 0;
+  }
   if (args.length > 0 && !args[0].startsWith("--")) opts.target = args[0];
   const rIndex = args.indexOf("--rotator");
   if (rIndex >= 0 && args[rIndex + 1]) opts.rotator = args[rIndex + 1];
@@ -33,8 +53,10 @@ export async function runCli(argsIn: string[]): Promise<number> {
   const level = levelIndex >= 0 && args[levelIndex + 1] ? args[levelIndex + 1] as any : 'info';
   const logger = createLogger({ json: jsonLog, level });
 
-  const rotators = [dryRunRotator, applyRotator];
-  const rotator = rotators.find((r) => r.name === opts.rotator);
+  // Load rotators dynamically
+  const { loadRotators } = await import('./rotators/loader.js').catch(() => import('./rotators/loader')) as any;
+  const rotators = await loadRotators();
+  const rotator = rotators.find((r: any) => r.name === opts.rotator);
   if (!rotator) {
     logger.error(`Unknown rotator: ${opts.rotator}`);
     return 2;
