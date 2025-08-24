@@ -19,7 +19,7 @@ describe('apply rotator safeUpdate', () => {
     }
     fs.unlinkSync(tmp);
     try {
-      fs.rmdirSync('.sentinel_tmp', { recursive: true });
+      fs.rmSync('.sentinel_tmp', { recursive: true, force: true });
     } catch (_) {}
     expect(res.success).toBe(true);
     expect(content).toContain('__REPLACED_SECRET_');

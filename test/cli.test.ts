@@ -17,7 +17,7 @@ describe('cli', () => {
   try { fs.mkdirSync(tmp); } catch (_) {}
   const code = await runCli([tmp, '--rotator', 'apply', '--force']);
   // cleanup
-  try { fs.rmdirSync(tmp, { recursive: true }); } catch (_) {}
+  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
   expect(code).toBe(0);
   });
 
@@ -30,7 +30,7 @@ describe('cli', () => {
     const cfgPath = path.join(repo, '.secretsentinel.json');
     fs.writeFileSync(cfgPath, JSON.stringify(cfg));
     const code = await runCli([repo, '--rotator', 'dry-run', '--config', cfgPath]);
-    try { fs.rmdirSync(repo, { recursive: true }); } catch {}
+  try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
     expect(code).toBe(0);
   });
 

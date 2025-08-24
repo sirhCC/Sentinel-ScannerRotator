@@ -21,7 +21,7 @@ describe('config patterns', () => {
 
   // cleanup
   try { fs.unlinkSync(tmp); } catch {}
-  try { fs.rmdirSync(tmpdir, { recursive: true }); } catch {}
+  try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
 
   const found = res.find((f) => f.match.includes('MYSECRET_ABC'));
   expect(!!found).toBe(true);

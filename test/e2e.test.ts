@@ -29,7 +29,7 @@ describe('e2e harness', () => {
     expect(!!bak).toBe(true);
 
     // cleanup
-    try { fs.rmdirSync(tmpdir, { recursive: true }); } catch (_) {}
-    try { fs.unlinkSync(file); fs.rmdirSync(repo); } catch (_) {}
+  try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch (_) {}
+  try { fs.unlinkSync(file); fs.rmSync(repo, { recursive: true, force: true }); } catch (_) {}
   });
 });
