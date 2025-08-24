@@ -19,11 +19,11 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       try {
         const req = eval('require');
         mod = req('js-yaml');
-      } catch (e) {
+      } catch {
         // module not installed at runtime; treat as no config
       }
       if (mod && typeof mod.load === 'function') {
-        const parsed = mod.load(c) as any;
+        const parsed = mod.load(c);
         return parsed?.patterns || [];
       }
     }
@@ -37,7 +37,7 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       const parsed = JSON.parse(content);
       return parsed.patterns || [];
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
   return [];
