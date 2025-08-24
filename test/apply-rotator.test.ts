@@ -50,4 +50,21 @@ describe('apply rotator safeUpdate', () => {
     // content should remain original
     expect(content).toContain('AKIAABCDEFGHIJKLMNOP');
   });
+
+  it('supports template-based replacement tokens', async () => {
+    const tmp = 'tmp-apply-template.txt';
+    const secret = 'AKIAABCDEFGHIJKLMNOP';
+    const fileContent = `before ${secret} after`;
+    const fs = require('fs');
+    fs.writeFileSync(tmp, fileContent);
+    const finding = { filePath: tmp, line: 1, column: 8, match: secret } as any;
+    const { applyRotator } = await import('../src/rotators/applyRotator');
+    const res = await applyRotator.rotate(finding, { template: '__MASKED_{{timestamp}}__' });
+    const content = fs.readFileSync(tmp, 'utf8');
+    // cleanup
+    try { fs.unlinkSync(tmp); } catch {}
+    try { fs.rmSync('.sentinel_tmp', { recursive: true, force: true }); } catch {}
+    expect(res.success).toBe(true);
+    expect(content).toMatch(/__MASKED_\d+__/);
+  });
 });
