@@ -10,6 +10,7 @@ type CLIOptions = {
   rotator: string;
   dryRun: boolean;
   force: boolean;
+  config?: string;
 };
 
 export async function runCli(argsIn: string[]): Promise<number> {
@@ -20,6 +21,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (rIndex >= 0 && args[rIndex + 1]) opts.rotator = args[rIndex + 1];
   if (args.includes("--dry-run")) opts.dryRun = true;
   if (args.includes("--force")) opts.force = true;
+  const cIdx = args.indexOf('--config');
+  if (cIdx >= 0 && args[cIdx + 1]) opts.config = args[cIdx + 1];
   // collect --ignore <pattern> occurrences
   const extraIg: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -43,7 +46,19 @@ export async function runCli(argsIn: string[]): Promise<number> {
     return 3;
   }
 
-  const findings = await scanPath(opts.target, extraIg);
+  let baseDir: string | undefined;
+  if (opts.config) {
+    const path = await import('path');
+    const fs = await import('fs/promises');
+    try {
+      const st = await fs.stat(opts.config);
+      baseDir = st.isDirectory() ? opts.config : path.dirname(opts.config);
+    } catch {
+      // if the provided path doesn't exist, treat it as a directory hint
+      baseDir = path.dirname(opts.config);
+    }
+  }
+  const findings = await scanPath(opts.target, extraIg, baseDir);
   logger.info(`Found ${findings.length} findings.`);
   for (const f of findings) {
     const res = await rotator.rotate(f, { dryRun: opts.dryRun || rotator.name === "dry-run" });
