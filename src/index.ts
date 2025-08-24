@@ -51,7 +51,11 @@ export async function runCli(argsIn: string[]): Promise<number> {
 
   // If requested, list available rotators and exit
   if (opts.listRotators) {
-    const names = rotators.map((r: any) => r.name).sort();
+  const set = new Set<string>(rotators.map((r: any) => r.name));
+  // guarantee built-ins are present in listing
+  set.add('dry-run');
+  set.add('apply');
+  const names = Array.from(set).sort();
     if (opts.logJson) console.log(JSON.stringify({ rotators: names }));
     else {
       console.log('Available rotators:');

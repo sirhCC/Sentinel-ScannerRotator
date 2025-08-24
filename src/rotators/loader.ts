@@ -24,6 +24,18 @@ async function listCandidateFiles(dir: string): Promise<string[]> {
 export async function loadRotators(opts: LoaderOptions = {}): Promise<Rotator[]> {
   const loaded: Record<string, Rotator> = {};
 
+  // 0) Always include built-ins first to guarantee availability
+  try {
+    const mod1: any = await import('./dryRunRotator.js');
+    const mod2: any = await import('./applyRotator.js');
+    const dr = mod1?.dryRunRotator;
+    const ap = mod2?.applyRotator;
+    if (dr && !loaded[dr.name]) loaded[dr.name] = dr;
+    if (ap && !loaded[ap.name]) loaded[ap.name] = ap;
+  } catch {
+    // ignore
+  }
+
   // 1) Try dynamic discovery from our rotators directory (works in src & dist)
   const here = path.dirname(new URL(import.meta.url).pathname);
   const builtinDir = here; // this file lives in rotators/
@@ -55,20 +67,6 @@ export async function loadRotators(opts: LoaderOptions = {}): Promise<Rotator[]>
       }
     } catch {
       // ignore bad modules
-    }
-  }
-
-  // 3) Fallback: ensure at least built-ins are present
-  if (!loaded['dry-run'] || !loaded['apply']) {
-    try {
-  const mod1: any = await import('./dryRunRotator.js');
-  const mod2: any = await import('./applyRotator.js');
-      const dr = mod1?.dryRunRotator;
-      const ap = mod2?.applyRotator;
-      if (dr && !loaded[dr.name]) loaded[dr.name] = dr;
-      if (ap && !loaded[ap.name]) loaded[ap.name] = ap;
-    } catch {
-      // ignore
     }
   }
 
