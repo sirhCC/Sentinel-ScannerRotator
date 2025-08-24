@@ -53,4 +53,19 @@ describe('cli', () => {
     const code = await runCli(['--list-rotators']);
     expect(code).toBe(0);
   });
+
+  it('applies with a custom template via --template', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const repo = 'tmp-cli-template';
+    const f = path.join(repo, 's.txt');
+    try { fs.mkdirSync(repo); } catch {}
+    fs.writeFileSync(f, 'before AKIAABCDEFGHIJKLMNOP after');
+    const code = await runCli([repo, '--rotator', 'apply', '--force', '--template', '__CLI_{{timestamp}}__']);
+    const content = fs.readFileSync(f, 'utf8');
+    try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync('.sentinel_tmp', { recursive: true, force: true }); } catch {}
+    expect(code).toBe(0);
+    expect(content).toMatch(/__CLI_\d+__/);
+  });
 });
