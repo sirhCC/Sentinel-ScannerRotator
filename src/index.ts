@@ -20,14 +20,14 @@ export async function runCli(argsIn: string[]): Promise<number> {
     .name('sentinel')
     .description('SecretSentinel-ScannerRotator')
     .argument('[target]', 'path to scan', '.')
-    .option('--rotator <name>', 'rotator to use (dry-run | apply)', 'dry-run')
-    .option('--dry-run', 'do not modify files; only report actions', false)
-    .option('--force', 'required to run apply when not using --dry-run', false)
-    .option('--ignore <glob...>', 'add ignore pattern(s) (repeatable)')
-    .option('--log-json', 'emit JSON logs', false)
-    .option('--log-level <lvl>', 'error | warn | info | debug', 'info')
-    .option('--config <path>', 'path to a config file or directory')
-    .option('--rotators-dir <dir...>', 'additional directories to discover rotators');
+  .option('-r, --rotator <name>', 'rotator to use (dry-run | apply)', 'dry-run')
+  .option('-d, --dry-run', 'do not modify files; only report actions', false)
+  .option('-f, --force', 'required to run apply when not using --dry-run', false)
+  .option('-i, --ignore <glob...>', 'add ignore pattern(s) (repeatable)')
+  .option('-j, --log-json', 'emit JSON logs', false)
+  .option('-l, --log-level <lvl>', 'error | warn | info | debug', 'info')
+  .option('-c, --config <path>', 'path to a config file or directory')
+  .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators');
 
   // Add version from package.json if available
   try {
