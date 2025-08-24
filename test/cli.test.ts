@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { runCli } from '../src/index';
 
 describe('cli', () => {
+  it('prints help and exits 0', async () => {
+    const code = await runCli(['--help']);
+    expect(code).toBe(0);
+  });
   it('refuses apply without force', async () => {
     const code = await runCli(['.', '--rotator', 'apply']);
     expect(code).toBe(3);
