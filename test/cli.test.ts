@@ -48,4 +48,9 @@ describe('cli', () => {
     try { fs.rmSync(plug, { recursive: true }); } catch {}
     expect(code).toBe(0);
   });
+
+  it('lists available rotators and exits 0', async () => {
+    const code = await runCli(['--list-rotators']);
+    expect(code).toBe(0);
+  });
 });
