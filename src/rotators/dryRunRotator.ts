@@ -1,4 +1,4 @@
-import { Rotator, Finding } from "../types";
+import { Rotator, Finding } from "../types.js";
 
 export const dryRunRotator: Rotator = {
   name: "dry-run",

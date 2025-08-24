@@ -1,5 +1,5 @@
-import { Rotator, Finding } from "../types";
-import { safeUpdate } from "../fileSafeUpdate";
+import { Rotator, Finding } from "../types.js";
+import { safeUpdate } from "../fileSafeUpdate.js";
 
 export const applyRotator: Rotator = {
   name: "apply",

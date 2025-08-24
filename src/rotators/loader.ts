@@ -1,15 +1,14 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import { Rotator } from '../types';
+import { Rotator } from '../types.js';
+import { isRotator } from './schema.js';
 
 type LoaderOptions = {
   extraDirs?: string[];
 };
 
-function isRotator(obj: any): obj is Rotator {
-  return obj && typeof obj.name === 'string' && typeof obj.rotate === 'function';
-}
+// isRotator imported from schema
 
 async function listCandidateFiles(dir: string): Promise<string[]> {
   try {
@@ -57,8 +56,8 @@ export async function loadRotators(opts: LoaderOptions = {}): Promise<Rotator[]>
   // 3) Fallback: ensure at least built-ins are present
   if (!loaded['dry-run'] || !loaded['apply']) {
     try {
-      const mod1: any = await import('./dryRunRotator.js').catch(() => import('./dryRunRotator'));
-      const mod2: any = await import('./applyRotator.js').catch(() => import('./applyRotator'));
+  const mod1: any = await import('./dryRunRotator.js');
+  const mod2: any = await import('./applyRotator.js');
       const dr = mod1?.dryRunRotator;
       const ap = mod2?.applyRotator;
       if (dr && !loaded[dr.name]) loaded[dr.name] = dr;

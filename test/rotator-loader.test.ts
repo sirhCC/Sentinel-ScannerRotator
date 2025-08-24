@@ -22,4 +22,12 @@ describe('rotator loader', () => {
     expect(names).toContain('custom');
     try { fs.rmSync(dir, { recursive: true }); } catch {}
   });
+
+  it('loads the example rotator from examples/rotators', async () => {
+    const { loadRotators } = await import('../src/rotators/loader');
+    const dir = path.join(process.cwd(), 'examples', 'rotators');
+    const list = await loadRotators({ extraDirs: [dir] });
+    const names = list.map(r => r.name);
+    expect(names).toContain('example');
+  });
 });
