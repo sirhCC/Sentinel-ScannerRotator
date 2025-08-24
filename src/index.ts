@@ -5,15 +5,6 @@ import { Command } from 'commander';
 import fs from 'fs/promises';
 import path from 'path';
 
-type CLIOptions = {
-  target: string;
-  rotator: string;
-  dryRun: boolean;
-  force: boolean;
-  config?: string;
-  rotatorsDirs?: string[];
-};
-
 export async function runCli(argsIn: string[]): Promise<number> {
   const program = new Command();
   program

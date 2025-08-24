@@ -6,7 +6,7 @@ const DEFAULT_TMP_DIR = path.join(process.cwd(), '.sentinel_tmp');
 async function ensureTmpDir(dir: string) {
   try {
     await fs.mkdir(dir, { recursive: true });
-  } catch (_) {
+  } catch {
     // ignore
   }
 }
@@ -37,12 +37,12 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
       if (backupMade) {
         await fs.copyFile(backupPath, filePath);
       }
-    } catch (e2) {
+  } catch {
       // ignore rollback failure
     }
     try {
       await fs.unlink(tmpPath);
-    } catch (_) {
+  } catch {
       // ignore
     }
     return { success: false, error: e?.message ?? String(e) };
