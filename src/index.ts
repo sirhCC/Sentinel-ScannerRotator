@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-import { scanPath } from "./scanner";
-import { dryRunRotator } from "./rotators/dryRunRotator";
-import { applyRotator } from "./rotators/applyRotator";
+import { scanPath } from "./scanner.js";
 import { argv } from "process";
-import { createLogger } from "./logger";
+import { createLogger } from "./logger.js";
 
 type CLIOptions = {
   target: string;
@@ -63,7 +61,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   const logger = createLogger({ json: jsonLog, level });
 
   // Load rotators dynamically
-  const { loadRotators } = await import('./rotators/loader.js').catch(() => import('./rotators/loader')) as any;
+  const { loadRotators } = await import('./rotators/loader.js') as any;
   const rotators = await loadRotators({ extraDirs: opts.rotatorsDirs });
   const rotator = rotators.find((r: any) => r.name === opts.rotator);
   if (!rotator) {
@@ -99,11 +97,4 @@ export async function runCli(argsIn: string[]): Promise<number> {
   return 0;
 }
 
-if (require.main === module) {
-  runCli(process.argv.slice(2))
-    .then((code) => process.exit(code))
-    .catch((e) => {
-      console.error(e);
-      process.exit(1);
-    });
-}
+// Note: No top-level execution here. See src/cli.ts for the CLI entry point.
