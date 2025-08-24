@@ -16,4 +16,17 @@ describe('cli', () => {
   try { fs.rmdirSync(tmp, { recursive: true }); } catch (_) {}
   expect(code).toBe(0);
   });
+
+  it('accepts --config path (file or dir) and runs', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const repo = 'tmp-cli-conf';
+    try { fs.mkdirSync(repo); } catch {}
+    const cfg = { patterns: [ { name: 'CLI_TEST', regex: 'CLICONF' } ] };
+    const cfgPath = path.join(repo, '.secretsentinel.json');
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg));
+    const code = await runCli([repo, '--rotator', 'dry-run', '--config', cfgPath]);
+    try { fs.rmdirSync(repo, { recursive: true }); } catch {}
+    expect(code).toBe(0);
+  });
 });
