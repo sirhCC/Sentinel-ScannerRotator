@@ -29,7 +29,17 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
     backupMade = true;
     const updated = transform(original);
     await fs.writeFile(tmpPath, updated, 'utf8');
-    await fs.rename(tmpPath, filePath);
+    try {
+      await fs.rename(tmpPath, filePath);
+    } catch (renameErr: any) {
+      // fallback: try copying the temp file into place (handles cross-device/FS issues)
+      try {
+        await fs.copyFile(tmpPath, filePath);
+        try { await fs.unlink(tmpPath); } catch {}
+      } catch (copyErr) {
+        throw renameErr;
+      }
+    }
     return { success: true, backupPath };
   } catch (e: any) {
     // attempt rollback
