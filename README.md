@@ -64,6 +64,7 @@ Key options:
 - `--out-format <fmt>`: json | csv (overrides extension inference)
 - `--cache <path>`: persist scan cache to a file (or use SENTINEL_CACHE)
 - `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
+- `--fail-threshold-high|--fail-threshold-medium|--fail-threshold-low <n>`: with `--fail-on-findings`, fail if per-severity counts exceed N
   
 Environment options:
 
