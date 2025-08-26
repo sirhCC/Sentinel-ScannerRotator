@@ -33,9 +33,12 @@ This file is a single, ordered list of work to do for the project. Highest prior
 2. Add configuration file support (YAML/JSON) to allow customizing regexes, rotators, dry-run defaults, and exclude lists.
 	- [DONE 2025-08-23] Added runtime YAML/JSON loader in `src/config.ts` (supports `.secretsentinel.yaml` and `.secretsentinel.json`), added tests `test/config-file.test.ts`.
 3. Improve `apply` rotator: support templated replacement or rotate to a secret manager (plugin points) rather than simple placeholder.
+	- [DONE 2025-08-25] Added templated replacement tokens to `apply` rotator (`{{match}}`, `{{timestamp}}`, `{{file}}`).
+	- [DONE 2025-08-25] Added new built-in `backend` rotator that stores secrets in a backend (file provider by default; optional AWS Secrets Manager) and replaces with a `secretref://<provider>/<key>` reference.
 4. Add pluggable rotator interface and loader from `rotators/` directory (dynamic import), and doc for writing new rotators.
 	- [DONE 2025-08-23] Implemented dynamic loader `src/rotators/loader.ts`, wired CLI to load rotators and added `--rotators-dir` support, tests and README notes added.
 5. Add unit tests for rotator implementations, including failure modes (write permission errors, partial replacements).
+	- [DONE 2025-08-25] Added `test/apply-rotator.test.ts` failure-mode coverage and `test/backend-rotator.test.ts` for file backend; stabilized temp-dir usage with `SENTINEL_TMP_DIR` per test to avoid flakiness.
 6. Add comprehensive CLI help (`--help`) and validate flags with a parsing library (yargs/commander/zod for validation).
 	- [DONE 2025-08-23] Migrated to Commander with detailed help and short flags; added `--list-rotators` for discoverability and tests for it.
 7. Add package scripts for linting and formatting and include ESLint + Prettier; enforce in CI.
@@ -46,6 +49,10 @@ This file is a single, ordered list of work to do for the project. Highest prior
 ## P2 — Medium (integrations, UX, safety)
 
 1. Rotator integrations: implement connectors for at least one secret backend (e.g., AWS Secrets Manager or Vault) as an example `apply` rotator.
+	- [DONE 2025-08-25] Implemented `backend` rotator with file provider (default) and optional AWS Secrets Manager (SDK optional, lazy-loaded). Docs updated.
+	- Follow-ups:
+		- Add HashiCorp Vault provider (token/addr envs) with parity to AWS provider.
+		- Add CLI e2e test path using `--rotator backend` (file provider) in addition to unit tests.
 2. Add interactive mode for review: show findings in an interactive TUI (fuzzy-select) to approve per-finding rotations.
 3. Add permissions and dry-run audit logs: produce a signed audit artifact describing changes that would be made and what was changed when applied.
 4. Add concurrent scanning and rotator throttling for performance on large repos (worker pool size, rate-limiting rotator calls).
