@@ -56,23 +56,33 @@ export const zipScanner: ScannerPlugin = {
     return filePath.toLowerCase().endsWith('.zip');
   },
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+    const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
+    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
     const buf = await fs.readFile(filePath);
     const zip = await JSZip.loadAsync(buf);
     const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_ZIP_MAX_ENTRIES || '1000');
+    const maxEntryBytes = Number(process.env.SENTINEL_ZIP_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
+    const maxBytes = Number(process.env.SENTINEL_ZIP_MAX_BYTES || '10485760'); // 10 MiB
     let count = 0;
-    const entries = Object.values(zip.files) as any[];
+    let totalBytes = 0;
+    type ZipEntry = { dir?: boolean; name: string; async: (t: 'string') => Promise<string> };
+    const entries = Object.values(zip.files) as unknown as ZipEntry[];
     for (const entry of entries) {
       if (count++ >= maxEntries) break;
-      if ((entry as any).dir) continue;
+      if (entry.dir) continue;
       // Only attempt to parse as text (utf8) for now
       let content: string;
       try {
-        content = await (entry as any).async('string');
+        content = await entry.async('string');
       } catch {
         continue;
       }
+      const bytes = Buffer.byteLength(content, 'utf8');
+      if (bytes > maxEntryBytes) continue;
+      if (totalBytes + bytes > maxBytes) break;
+      totalBytes += bytes;
       const lines = content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -81,7 +91,7 @@ export const zipScanner: ScannerPlugin = {
           const re = new RegExp(s.re.source, s.re.flags);
           while ((m = re.exec(line)) !== null) {
             findings.push({
-              filePath: `${filePath}:${(entry as any).name}`,
+              filePath: `${filePath}:${entry.name}`,
               line: i + 1,
               column: m.index + 1,
               match: m[0],
@@ -96,5 +106,7 @@ export const zipScanner: ScannerPlugin = {
 };
 
 export function getScannerPlugins(): ScannerPlugin[] {
-  return [zipScanner, textScanner]; // order matters; zip first, then fallback to text
+  const opt = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
+  const enableZip = !(opt === 'false' || opt === '0' || opt === 'no');
+  return enableZip ? [zipScanner, textScanner] : [textScanner];
 }
