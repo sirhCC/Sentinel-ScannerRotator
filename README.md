@@ -197,6 +197,7 @@ Providers
 
 - file (default): stores a JSON map in `.sentinel_secrets.json` (override with `SENTINEL_BACKEND_FILE`).
 - aws (optional): uses AWS Secrets Manager. Requires installing `@aws-sdk/client-secrets-manager` and setting `AWS_REGION` or `AWS_DEFAULT_REGION`.
+- vault (optional): uses HashiCorp Vault KV v2 via HTTP (global fetch). Requires `VAULT_ADDR` and `VAULT_TOKEN`. Optional `SENTINEL_VAULT_MOUNT` (default `secret`) and `SENTINEL_VAULT_PATH` (default `sentinel`).
 
 Environment variables
 
@@ -214,6 +215,11 @@ npm start -- . --rotator backend --force
 # AWS Secrets Manager (requires SDK and AWS creds/region)
 # npm install @aws-sdk/client-secrets-manager
 $env:SENTINEL_BACKEND = 'aws'; $env:AWS_REGION = 'us-east-1'
+npm start -- . --rotator backend --force
+
+# HashiCorp Vault (KV v2)
+$env:SENTINEL_BACKEND = 'vault'; $env:VAULT_ADDR = 'http://127.0.0.1:8200'; $env:VAULT_TOKEN = '<token>'
+# optional overrides: $env:SENTINEL_VAULT_MOUNT = 'secret'; $env:SENTINEL_VAULT_PATH = 'sentinel'
 npm start -- . --rotator backend --force
 ```
 
