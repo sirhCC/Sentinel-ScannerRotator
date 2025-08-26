@@ -32,7 +32,10 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--scan-concurrency <n>', 'number of concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)', (v) => parseInt(v, 10))
   .option('--rotate-concurrency <n>', 'number of concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)', (v) => parseInt(v, 10))
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
-  .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10));
+  .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
+  .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
+  .option('--fail-threshold-medium <n>', 'with --fail-on-findings: fail if MEDIUM severity findings exceed N', (v) => parseInt(v, 10))
+  .option('--fail-threshold-low <n>', 'with --fail-on-findings: fail if LOW severity findings exceed N', (v) => parseInt(v, 10));
 
   // Add version from package.json if available
   try {
@@ -124,6 +127,23 @@ export async function runCli(argsIn: string[]): Promise<number> {
   await exportFindingsIfRequested();
   // CI guard: optionally fail fast on findings, skipping rotations
   if (opts.failOnFindings) {
+    // Per-severity thresholds (only enforced if provided)
+    const sevCounts = findings.reduce((acc: Record<string, number>, f: any) => {
+      const sev = (f.severity || 'medium').toLowerCase();
+      acc[sev] = (acc[sev] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const checkSev = (name: 'high'|'medium'|'low', thr: number | undefined) => {
+      if (!Number.isFinite(thr)) return false;
+      const n = sevCounts[name] || 0;
+      if (n > (thr as number)) {
+        logger.error(`Failing due to ${name.toUpperCase()} severity findings (${n}) exceeding threshold (${thr}).`);
+        return true;
+      }
+      return false;
+    };
+    const tripped = checkSev('high', opts.failThresholdHigh) || checkSev('medium', opts.failThresholdMedium) || checkSev('low', opts.failThresholdLow);
+    if (tripped) return 4;
     const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : 0;
     if (findings.length > threshold) {
       logger.error(`Failing due to findings (${findings.length}) exceeding threshold (${threshold}).`);
