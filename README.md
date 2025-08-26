@@ -43,6 +43,7 @@ npm start -- --version
   - `-L, --list-rotators` (list available rotators and exit)
   - `-t, --template <tpl>` (apply replacement template; supports `{{match}}`, `{{timestamp}}`, `{{file}}`)
   - `--verify` (backend rotator: read-back verification before updating files)
+  - `-I, --interactive` (approve each finding before apply; can auto-answer via `SENTINEL_INTERACTIVE_AUTO` env)
   - `-x, --rotators-dir <dir...>` (repeatable)
 
 API
@@ -86,6 +87,10 @@ Examples:
 $env:SENTINEL_TMP_DIR = ".sentinel_tmp_run1"; npm start -- . --rotator apply --force
 Remove-Item -Recurse -Force ".sentinel_tmp_run1"
 ```
+
+Interactive mode
+
+- Use `--interactive` to approve each change. For automation/tests, set `SENTINEL_INTERACTIVE_AUTO` to `yes` or `no` to auto-approve/deny prompts.
 
 ## Template tokens
 
