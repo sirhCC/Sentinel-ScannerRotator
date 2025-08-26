@@ -55,6 +55,8 @@ export const textScanner: ScannerPlugin = {
             column: h.index + 1,
             match: h.token,
             context: line.trim().slice(0, 200),
+            ruleName: 'High-Entropy Token',
+            severity: 'medium',
           });
         }
       }
@@ -99,7 +101,7 @@ export const envScanner: ScannerPlugin = {
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
         for (const h of hits) {
-          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200) });
+          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
     }
@@ -139,7 +141,7 @@ export const dockerScanner: ScannerPlugin = {
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
         for (const h of hits) {
-          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200) });
+          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
     }
