@@ -34,12 +34,14 @@
   "rimraf": "^5.0.0",
     "typescript-eslint": "^8.40.0",
   "vitest": "^1.0.0",
-  "@types/jszip": "^3.1.0"
+  "@types/jszip": "^3.1.0",
+  "@types/tar-stream": "^3.1.2"
   },
   "dependencies": {
     "commander": "^14.0.0",
     "ignore": "^5.2.0",
   "js-yaml": "^4.1.0",
-  "jszip": "^3.10.1"
+  "jszip": "^3.10.1",
+  "tar-stream": "^3.1.7"
   }
 }
