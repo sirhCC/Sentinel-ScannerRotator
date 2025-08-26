@@ -57,7 +57,7 @@ The `--audit <path>` option writes NDJSON logs that include details such as file
 - Rotate and securely delete when no longer needed.
 - Do not commit audit artifacts to source control.
 
-Note: Audit events are not signed or tamper-evident. If you require integrity guarantees, use an external signing process or append-only store (feature under consideration).
+Integrity: Audit events include a SHA-256 hash of the payload and an optional HMAC-SHA256 signature when `SENTINEL_AUDIT_SIGN_KEY` is set (with optional `SENTINEL_AUDIT_SIGN_KEY_ID`). Treat signed logs as sensitive; protect keys.
 
 ## Temporary files and backups
 
@@ -79,7 +79,7 @@ Note: Audit events are not signed or tamper-evident. If you require integrity gu
 
 ## Known limitations
 
-- The scanner reads files as UTF‑8 text. It does not follow symlinks or scan inside archives; binary files may yield noisy results.
+- The scanner reads files as UTF‑8 text. It does not follow symlinks. ZIP support scans text entries only; binary entries are skipped.
 - It scans the working tree only; it does not analyze commit history or remote artifacts.
 - File backend stores secrets unencrypted; prefer AWS Secrets Manager or Vault in production.
 - Audit logs are plaintext NDJSON and may contain sensitive values.
@@ -99,7 +99,7 @@ In scope:
 Out of scope (examples):
 
 - Supply-chain protection (npm/package integrity, OS hardening)
-- Scanning inside archives, containers, or remote systems
+- Scanning inside containers or remote systems
 - Cryptographic guarantees for audit logs (no built-in signatures yet)
 - Automatic key rotation or revocation policies in backends
 
