@@ -3,24 +3,14 @@ import path from "path";
 import { Finding } from "./types.js";
 import { loadIgnorePatterns } from "./ignore.js";
 import { loadCache, saveCache, CacheData } from './cache.js';
-import { loadPatterns } from "./config.js";
+import { getScannerPlugins } from './plugins/scanners.js';
 
 type ScanOptions = {
   concurrency?: number;
   cachePath?: string;
 };
 
-async function loadSecretRegexes(baseDir?: string) {
-  const defs = await loadPatterns(baseDir);
-  const builtins = [
-    { name: "AWS Access Key ID", re: /AKIA[0-9A-Z]{16}/g },
-    { name: "Generic API Key", re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
-    { name: "JWT-Like", re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
-  ];
-  if (defs.length === 0) return builtins;
-  const custom = defs.map((d) => ({ name: d.name, re: new RegExp(d.regex, 'g') }));
-  return builtins.concat(custom);
-}
+// Note: regex loading handled by plugins/scanners
 
 export async function scanPath(targetPath: string, extraIg?: string[], baseDir?: string, options?: ScanOptions): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
@@ -108,25 +98,8 @@ async function walkDirCollect(dir: string, ig: { ignores: (p: string) => boolean
 }
 
 export async function scanFile(filePath: string, baseDir?: string): Promise<Finding[]> {
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-  const content = await fs.readFile(filePath, "utf8");
-  const lines = content.split(/\r?\n/);
-  const findings: Finding[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    for (const s of SECRET_REGEXES) {
-      let m: RegExpExecArray | null;
-      const re = new RegExp(s.re.source, s.re.flags);
-      while ((m = re.exec(line)) !== null) {
-        findings.push({
-          filePath,
-          line: i + 1,
-          column: m.index + 1,
-          match: m[0],
-          context: line.trim().slice(0, 200),
-        });
-      }
-    }
-  }
-  return findings;
+  // Choose a scanner plugin based on file type; fallback to text
+  const plugins = getScannerPlugins();
+  const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
+  return plugin.scan(filePath, baseDir ?? path.dirname(filePath));
 }
