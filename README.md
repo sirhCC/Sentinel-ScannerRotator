@@ -57,6 +57,8 @@ Key options:
 - `-x, --rotators-dir <dir...>`: discover additional rotators (repeatable)
 - `--scan-concurrency <n>`: concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)
 - `--rotate-concurrency <n>`: concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)
+- `--out <file>`: write scan findings (JSON or CSV; inferred from extension)
+- `--out-format <fmt>`: json | csv (overrides extension inference)
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation.
 
@@ -86,6 +88,13 @@ Backend rotation with verification (file provider):
 ```powershell
 $env:SENTINEL_BACKEND = 'file'; $env:SENTINEL_BACKEND_FILE = '.sentinel_secrets.json'
 npm start -- . --rotator backend --force --verify --template "{{ref}}"
+```
+
+Export findings to JSON or CSV:
+
+```powershell
+npm start -- . --rotator dry-run --out .\findings.json
+npm start -- . --rotator dry-run --out .\findings.csv --out-format csv
 ```
 
 ## Safety: backups and temp directory
@@ -260,10 +269,17 @@ npm start -- . --rotator backend --force
 
 Verification: add `--verify` to read back the stored value before modifying files.
 
-## Performance: concurrency and throttling
+## Performance: concurrency, caching, and throttling
 
 - Scanning uses a worker pool. Configure with `--scan-concurrency <n>` or `SENTINEL_SCAN_CONCURRENCY`.
 - Rotations run concurrently but never edit the same file in parallel. Configure with `--rotate-concurrency <n>` or `SENTINEL_ROTATE_CONCURRENCY`.
+- Speed up repeated scans by enabling a persistent scan cache: `--cache <file>` or `SENTINEL_CACHE`.
+
+Example (PowerShell):
+
+```powershell
+npm start -- . --rotator dry-run --scan-concurrency 16 --rotate-concurrency 8 --cache .\.sentinel\cache.json
+```
 
 ## Development
 
