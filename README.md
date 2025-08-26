@@ -317,6 +317,24 @@ $env:SENTINEL_CACHE_MODE = 'hash'; npm start -- . --rotator dry-run --cache .\.s
 - Findings include `rule` and `severity` when available. Exports (JSON/CSV) include these fields.
 - Opt-in entropy detector: set `SENTINEL_ENTROPY=true` to flag high-entropy tokens (base64/hex-like) above a threshold. Future flags may allow tuning the threshold.
 
+### Policy (optional)
+
+You can add a `policy` block in `.secretsentinel.json`/`.secretsentinel.yaml` (or `config/defaults.json`) to guide CI gating when using `--fail-on-findings`:
+
+Example JSON:
+
+```json
+{
+  "policy": {
+    "thresholds": { "total": 0, "high": 0, "medium": 2, "low": 10 },
+    "forbidRules": ["AWS Access Key ID"],
+    "minSeverity": "medium"
+  }
+}
+```
+
+CLI flags override the policy thresholds when provided.
+
 ## Development
 
 Build, test, lint, and format:
