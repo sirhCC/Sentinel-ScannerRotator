@@ -77,7 +77,9 @@ Legend:
 ## P3 — Lower priority (polish & enterprise features)
 
 1. Add ruleset library and rule marketplace (curated regexes, entropy checks, ML model hook) — long-term.
+	- 🟨 [IN PROGRESS 2025-08-26] Introduced curated built-in rules with severities and custom rules via config; scanners now emit `ruleName` and `severity`. Opt-in entropy detector added (SENTINEL_ENTROPY).
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
+	- 🟨 [IN PROGRESS 2025-08-26] Policy loader reads thresholds and forbidden rules from project config; CLI enforces per-severity/total thresholds and forbidden rules with `--fail-on-findings`. (Issue creation/integrations deferred.)
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
 4. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
 	- 🟨 [IN PROGRESS 2025-08-26] Scanner plugin system added; specialized scanners implemented:
