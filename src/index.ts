@@ -30,7 +30,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--out-format <fmt>', 'json | csv (overrides extension inference)')
   .option('--cache <path>', 'persist scan cache to a file to speed up repeated runs (or use SENTINEL_CACHE env)')
   .option('--scan-concurrency <n>', 'number of concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)', (v) => parseInt(v, 10))
-  .option('--rotate-concurrency <n>', 'number of concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)', (v) => parseInt(v, 10));
+  .option('--rotate-concurrency <n>', 'number of concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)', (v) => parseInt(v, 10))
+  .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
+  .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10));
 
   // Add version from package.json if available
   try {
@@ -120,6 +122,14 @@ export async function runCli(argsIn: string[]): Promise<number> {
     logger.info(`Wrote findings to ${outPath}`);
   }
   await exportFindingsIfRequested();
+  // CI guard: optionally fail fast on findings, skipping rotations
+  if (opts.failOnFindings) {
+    const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : 0;
+    if (findings.length > threshold) {
+      logger.error(`Failing due to findings (${findings.length}) exceeding threshold (${threshold}).`);
+      return 4;
+    }
+  }
   const auditor = opts.audit ? await createAuditWriter(opts.audit, false) : undefined;
   async function shouldApplyForFinding(f: any) {
     if (!opts.interactive || opts.dryRun) return true;

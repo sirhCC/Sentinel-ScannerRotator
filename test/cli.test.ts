@@ -54,6 +54,18 @@ describe('cli', () => {
     expect(code).toBe(0);
   });
 
+  it('fails fast with --fail-on-findings', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const repo = 'tmp-cli-fail';
+    const f = path.join(repo, 's.txt');
+    try { fs.mkdirSync(repo); } catch {}
+    fs.writeFileSync(f, 'AKIAABCDEFGHIJKLMNOP');
+    const code = await runCli([repo, '--rotator', 'dry-run', '--fail-on-findings']);
+    try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
+    expect(code).toBe(4);
+  });
+
   it('applies with a custom template via --template', async () => {
     const fs = require('fs');
     const path = require('path');
