@@ -42,6 +42,7 @@ npm start -- --version
   - `-c, --config <path>`
   - `-L, --list-rotators` (list available rotators and exit)
   - `-t, --template <tpl>` (apply replacement template; supports `{{match}}`, `{{timestamp}}`, `{{file}}`)
+  - `--verify` (backend rotator: read-back verification before updating files)
   - `-x, --rotators-dir <dir...>` (repeatable)
 
 API
@@ -198,6 +199,7 @@ Providers
 - file (default): stores a JSON map in `.sentinel_secrets.json` (override with `SENTINEL_BACKEND_FILE`).
 - aws (optional): uses AWS Secrets Manager. Requires installing `@aws-sdk/client-secrets-manager` and setting `AWS_REGION` or `AWS_DEFAULT_REGION`.
 - vault (optional): uses HashiCorp Vault KV v2 via HTTP (global fetch). Requires `VAULT_ADDR` and `VAULT_TOKEN`. Optional `SENTINEL_VAULT_MOUNT` (default `secret`) and `SENTINEL_VAULT_PATH` (default `sentinel`).
+  - Supports `VAULT_NAMESPACE` header when set.
 
 Environment variables
 
