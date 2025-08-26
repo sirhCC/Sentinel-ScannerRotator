@@ -68,9 +68,48 @@ async function awsProvider(): Promise<Provider> {
   }
 }
 
+async function vaultProvider(): Promise<Provider> {
+  // Minimal Vault KV v2 client via fetch
+  const addr = process.env.VAULT_ADDR || '';
+  const token = process.env.VAULT_TOKEN || '';
+  if (!addr || !token) {
+    throw new Error('Vault provider requires VAULT_ADDR and VAULT_TOKEN');
+  }
+  const mount = process.env.SENTINEL_VAULT_MOUNT || 'secret';
+  const basePath = process.env.SENTINEL_VAULT_PATH || 'sentinel';
+  const baseUrl = addr.replace(/\/$/, '');
+  const kvWriteUrl = (fullKey: string) => `${baseUrl}/v1/${mount}/data/${fullKey}`;
+
+  async function doPut(fullKey: string, value: string) {
+    const body = JSON.stringify({ data: { value } });
+    const res = await fetch(kvWriteUrl(fullKey), {
+      method: 'POST',
+      headers: {
+        'X-Vault-Token': token,
+        'Content-Type': 'application/json'
+      },
+      body,
+    } as any);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Vault write failed: ${res.status} ${txt}`);
+    }
+  }
+
+  return {
+    name: 'vault',
+    async put(key: string, value: string) {
+      const fullKey = `${basePath}/${key}`;
+      await doPut(fullKey, value);
+      return fullKey;
+    }
+  };
+}
+
 async function getProvider(): Promise<Provider> {
   const which = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
   if (which === 'aws') return awsProvider();
+  if (which === 'vault') return vaultProvider();
   return fileProvider();
 }
 
@@ -82,11 +121,11 @@ export const backendRotator: Rotator = {
   name: 'backend',
   async rotate(finding, options) {
     const ts = Date.now();
-    const provider = await getProvider();
+    const backendName = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
     const key = genKey(finding, ts);
 
     if (options?.dryRun) {
-      const ref = buildRef(provider.name, key);
+      const ref = buildRef(backendName, key);
       const placeholder = options?.template
         ? options.template
             .replace(/\{\{match\}\}/g, finding.match)
@@ -96,8 +135,8 @@ export const backendRotator: Rotator = {
         : ref;
       return { success: true, message: `Would store secret and replace with ${placeholder} in ${finding.filePath}:${finding.line}` };
     }
-
     try {
+      const provider = await getProvider();
       const refSuffix = await provider.put(key, finding.match);
       const ref = buildRef(provider.name, refSuffix);
       const placeholder = options?.template
