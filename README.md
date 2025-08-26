@@ -66,10 +66,23 @@ npm start -- --list-rotators
 npm start -- --list-rotators --log-json
 ```
 
-- Apply with a template (dangerous; creates backups in `.sentinel_tmp`)
+- Apply with a template (dangerous; creates backups in a temp dir)
 
 ```powershell
 npm start -- . --rotator apply --force --template "__MASKED_{{timestamp}}__"
+```
+
+## Temp directory and backups
+
+- By default, backups and temporary files are written under a folder named `.sentinel_tmp` inside the current working directory.
+- You can override this location by setting the environment variable `SENTINEL_TMP_DIR` to any writable directory. This is useful in CI or when running tests in parallel.
+- The `.sentinel_tmp/` directory is already ignored in `.gitignore`.
+
+Examples:
+
+```powershell
+$env:SENTINEL_TMP_DIR = ".sentinel_tmp_run1"; npm start -- . --rotator apply --force
+Remove-Item -Recurse -Force ".sentinel_tmp_run1"
 ```
 
 ## Template tokens
