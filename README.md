@@ -48,6 +48,7 @@ API
 
 - `src/scanner.ts` - scanner that finds secrets
 - `src/rotators` - rotator implementations (dry-run, apply)
+  - Built-in rotators: `dry-run`, `apply`, `backend`
 
 Warning
 
@@ -92,6 +93,7 @@ Supported tokens in `--template`:
 - `{{match}}` — the exact matched secret (use with care)
 - `{{timestamp}}` — `Date.now()` value
 - `{{file}}` — the file path containing the secret
+- `{{ref}}` — when using the `backend` rotator, this is the generated secret reference (e.g., `secretref://file/<key>`)
 
 Examples:
 
@@ -185,6 +187,34 @@ export const myRotator: Rotator = defineRotator({
 
 ```powershell
 npm start -- . --rotators-dir ./plugins/rotators --rotator my-rotator --dry-run
+```
+
+## Backend rotator
+
+The `backend` rotator stores the matched secret in a backend and replaces it in the file with a reference like `secretref://<provider>/<key>`.
+
+Providers
+
+- file (default): stores a JSON map in `.sentinel_secrets.json` (override with `SENTINEL_BACKEND_FILE`).
+- aws (optional): uses AWS Secrets Manager. Requires installing `@aws-sdk/client-secrets-manager` and setting `AWS_REGION` or `AWS_DEFAULT_REGION`.
+
+Environment variables
+
+- `SENTINEL_BACKEND` — `file` (default) or `aws`.
+- `SENTINEL_BACKEND_FILE` — path to the JSON secrets file for file backend.
+- `SENTINEL_BACKEND_PREFIX` — optional prefix for AWS secret names.
+
+Examples
+
+```powershell
+# File backend (default)
+$env:SENTINEL_BACKEND = 'file'; $env:SENTINEL_BACKEND_FILE = '.sentinel_secrets.json'
+npm start -- . --rotator backend --force
+
+# AWS Secrets Manager (requires SDK and AWS creds/region)
+# npm install @aws-sdk/client-secrets-manager
+$env:SENTINEL_BACKEND = 'aws'; $env:AWS_REGION = 'us-east-1'
+npm start -- . --rotator backend --force
 ```
 
 
