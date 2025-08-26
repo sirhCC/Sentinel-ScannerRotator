@@ -6,6 +6,7 @@ import tar from 'tar-stream';
 import zlib from 'zlib';
 import { Finding } from '../types.js';
 import { loadPatterns } from '../config.js';
+import { findHighEntropyTokens } from '../rules/entropy.js';
 
 export type ScannerPlugin = {
   name: string;
@@ -33,7 +34,9 @@ export const textScanner: ScannerPlugin = {
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
-    for (let i = 0; i < lines.length; i++) {
+  const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
+  const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
         let m: RegExpExecArray | null;
@@ -44,6 +47,18 @@ export const textScanner: ScannerPlugin = {
             line: i + 1,
             column: m.index + 1,
             match: m[0],
+            context: line.trim().slice(0, 200),
+          });
+        }
+      }
+      if (enableEntropy) {
+        const hits = findHighEntropyTokens(line);
+        for (const h of hits) {
+          findings.push({
+            filePath,
+            line: i + 1,
+            column: h.index + 1,
+            match: h.token,
             context: line.trim().slice(0, 200),
           });
         }
@@ -69,7 +84,9 @@ export const envScanner: ScannerPlugin = {
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
     // built-in regexes
-    for (let i = 0; i < lines.length; i++) {
+  const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
+  const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
         let m: RegExpExecArray | null;
@@ -83,6 +100,12 @@ export const envScanner: ScannerPlugin = {
       const mm = kv.exec(line);
       if (mm && sensitiveKeyRegex().test(mm[1]) && (mm[2].length >= 12)) {
         findings.push({ filePath, line: i + 1, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
+      }
+      if (enableEntropy) {
+        const hits = findHighEntropyTokens(line);
+        for (const h of hits) {
+          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200) });
+        }
       }
     }
     return findings;
@@ -101,7 +124,9 @@ export const dockerScanner: ScannerPlugin = {
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
-    for (let i = 0; i < lines.length; i++) {
+  const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
+  const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
         let m: RegExpExecArray | null;
@@ -115,6 +140,12 @@ export const dockerScanner: ScannerPlugin = {
       if (mm && sensitiveKeyRegex().test(mm[2]) && (mm[3].length >= 12)) {
         const value = mm[3];
         findings.push({ filePath, line: i + 1, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
+      }
+      if (enableEntropy) {
+        const hits = findHighEntropyTokens(line);
+        for (const h of hits) {
+          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200) });
+        }
       }
     }
     return findings;
