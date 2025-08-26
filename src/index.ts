@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { scanPath } from './scanner.js';
 import { createLogger } from './logger.js';
+import { createAuditWriter } from './audit.js';
 import { Command } from 'commander';
 import fs from 'fs/promises';
 import path from 'path';
@@ -23,7 +24,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('-t, --template <tpl>', 'replacement template for apply (supports {{match}}, {{timestamp}}, {{file}})')
   .option('--verify', 'verify backend stores by reading secret back before file update', false)
   .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators')
-  .option('-I, --interactive', 'approve each finding interactively', false);
+  .option('-I, --interactive', 'approve each finding interactively', false)
+  .option('--audit <path>', 'write NDJSON audit events to a file');
 
   // Add version from package.json if available
   try {
@@ -90,6 +92,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   }
   const findings = await scanPath(target, extraIg, baseDir);
   logger.info(`Found ${findings.length} findings.`);
+  const auditor = opts.audit ? await createAuditWriter(opts.audit, false) : undefined;
   async function shouldApplyForFinding(f: any) {
     if (!opts.interactive || opts.dryRun) return true;
     const auto = (process.env.SENTINEL_INTERACTIVE_AUTO || '').toLowerCase();
@@ -110,7 +113,22 @@ export async function runCli(argsIn: string[]): Promise<number> {
     });
     if (res.success) logger.info(res.message as string);
     else logger.warn(res.message as string);
+    if (auditor) {
+      await auditor.write({
+        ts: Date.now(),
+        file: f.filePath,
+        line: f.line,
+        column: f.column,
+        match: f.match,
+        rotator: rotator.name,
+        dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
+        verify: opts.verify || false,
+        success: res.success,
+        message: res.message,
+      });
+    }
   }
+  if (auditor) await auditor.close();
   return 0;
 }
 
