@@ -69,6 +69,8 @@ Key options:
 Environment options:
 
 - `SENTINEL_ENTROPY`: enable high-entropy token detection (`true`/`1`/`yes`).
+- `SENTINEL_ENTROPY_THRESHOLD`: entropy threshold in bits/char (default 3.5)
+- `SENTINEL_ENTROPY_MINLEN`: minimum token length to consider (default 32)
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation; 4 failed due to findings (with --fail-on-findings).
 
@@ -186,7 +188,7 @@ Example JSON (`.secretsentinel.json`):
 ```json
 {
   "patterns": [
-    { "name": "MY_API_KEY", "regex": "MYAPI_[A-Z0-9]{16}" }
+    { "name": "MY_API_KEY", "regex": "MYAPI_[A-Z0-9]{16}", "severity": "high" }
   ]
 }
 ```
