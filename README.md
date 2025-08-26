@@ -64,6 +64,10 @@ Key options:
 - `--out-format <fmt>`: json | csv (overrides extension inference)
 - `--cache <path>`: persist scan cache to a file (or use SENTINEL_CACHE)
 - `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
+  
+Environment options:
+
+- `SENTINEL_ENTROPY`: enable high-entropy token detection (`true`/`1`/`yes`).
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation; 4 failed due to findings (with --fail-on-findings).
 
@@ -304,6 +308,13 @@ Use stronger cache validation:
 ```powershell
 $env:SENTINEL_CACHE_MODE = 'hash'; npm start -- . --rotator dry-run --cache .\.sentinel\cache.json
 ```
+
+## Rules, severities, and entropy
+
+- Rules come from built-ins plus project config. Built-ins include AWS Access Key ID (high), a generic API key pattern (medium), and JWT-like strings (low).
+- Custom rules can be added via `.secretsentinel.json`/`.secretsentinel.yaml` using the existing `patterns` array; optional fields `severity` (low|medium|high) and `enabled: false` are supported.
+- Findings include `rule` and `severity` when available. Exports (JSON/CSV) include these fields.
+- Opt-in entropy detector: set `SENTINEL_ENTROPY=true` to flag high-entropy tokens (base64/hex-like) above a threshold. Future flags may allow tuning the threshold.
 
 ## Development
 
