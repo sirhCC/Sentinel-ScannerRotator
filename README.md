@@ -122,6 +122,8 @@ Add `--audit <path>` to record an append-only NDJSON stream of events. Each line
 }
 ```
 
+Integrity: each event includes a SHA-256 `hash` of the payload. If `SENTINEL_AUDIT_SIGN_KEY` is set, an `hmac-sha256` signature (`sig`) and optional `keyId` (`SENTINEL_AUDIT_SIGN_KEY_ID`) are added.
+
 ## Template tokens
 
 Supported tokens in `--template`:
