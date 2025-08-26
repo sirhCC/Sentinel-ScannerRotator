@@ -69,6 +69,7 @@ Legend:
 	- 🟥 [DONE 2025-08-25] Added `--out` and `--out-format` to export findings as JSON or CSV (with extension inference). Docs and tests included.
 6. Add caching to avoid re-scanning unchanged files (file mtime + size cache) to speed repeated runs.
 	- 🟥 [DONE 2025-08-26] Added persistent cache with `--cache <file>` or `SENTINEL_CACHE` env; integrates into scanner to reuse findings when mtime/size unchanged. Tests added (`test/cache.test.ts`).
+	- 🟥 [DONE 2025-08-26] Added optional hash mode (`SENTINEL_CACHE_MODE=hash`) to validate cache hits with SHA-256 and store content hashes; default remains `mtime`.
 
 ## P3 — Lower priority (polish & enterprise features)
 
