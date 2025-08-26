@@ -291,11 +291,18 @@ Verification: add `--verify` to read back the stored value before modifying file
   - Toggle on/off for all archives with `SENTINEL_SCAN_ARCHIVES` ("false"/"0"/"no" disables).
   - ZIP guardrails: `SENTINEL_ZIP_MAX_ENTRIES` (default 1000), `SENTINEL_ZIP_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_ZIP_MAX_BYTES` (default 10 MiB).
   - TAR.GZ guardrails: `SENTINEL_TAR_MAX_ENTRIES` (default 1000), `SENTINEL_TAR_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_TAR_MAX_BYTES` (default 10 MiB).
+- Cache modes: set `SENTINEL_CACHE_MODE=hash` to validate cache hits by SHA-256 content hash (default `mtime` uses mtime+size).
 
 Example (PowerShell):
 
 ```powershell
 npm start -- . --rotator dry-run --scan-concurrency 16 --rotate-concurrency 8 --cache .\.sentinel\cache.json
+```
+
+Use stronger cache validation:
+
+```powershell
+$env:SENTINEL_CACHE_MODE = 'hash'; npm start -- . --rotator dry-run --cache .\.sentinel\cache.json
 ```
 
 ## Development
