@@ -25,7 +25,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--verify', 'verify backend stores by reading secret back before file update', false)
   .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators')
   .option('-I, --interactive', 'approve each finding interactively', false)
-  .option('--audit <path>', 'write NDJSON audit events to a file');
+  .option('--audit <path>', 'write NDJSON audit events to a file')
+  .option('--scan-concurrency <n>', 'number of concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)', (v) => parseInt(v, 10))
+  .option('--rotate-concurrency <n>', 'number of concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)', (v) => parseInt(v, 10));
 
   // Add version from package.json if available
   try {
@@ -90,7 +92,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
       baseDir = path.dirname(opts.config);
     }
   }
-  const findings = await scanPath(target, extraIg, baseDir);
+  const envScanConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
+  const scanConc = (opts.scanConcurrency ?? (isNaN(envScanConc) ? undefined : envScanConc));
+  const findings = await scanPath(target, extraIg, baseDir, { concurrency: scanConc });
   logger.info(`Found ${findings.length} findings.`);
   const auditor = opts.audit ? await createAuditWriter(opts.audit, false) : undefined;
   async function shouldApplyForFinding(f: any) {
@@ -104,30 +108,51 @@ export async function runCli(argsIn: string[]): Promise<number> {
     rl.close();
     return answer === 'y' || answer === 'yes';
   }
+  // Concurrency for rotations, but avoid multiple concurrent edits to the same file.
+  const byFile = new Map<string, any[]>();
   for (const f of findings) {
-    const doIt = await shouldApplyForFinding(f);
-    const res = await rotator.rotate(f, {
-      dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
-      template: opts.template,
-      verify: opts.verify,
-    });
-    if (res.success) logger.info(res.message as string);
-    else logger.warn(res.message as string);
-    if (auditor) {
-      await auditor.write({
-        ts: Date.now(),
-        file: f.filePath,
-        line: f.line,
-        column: f.column,
-        match: f.match,
-        rotator: rotator.name,
-        dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
-        verify: opts.verify || false,
-        success: res.success,
-        message: res.message,
-      });
+    const arr = byFile.get(f.filePath) || [];
+    arr.push(f);
+    byFile.set(f.filePath, arr);
+  }
+  const files = Array.from(byFile.keys());
+  const envRotateConc = Number(process.env.SENTINEL_ROTATE_CONCURRENCY);
+  const rotateConc = Math.max(1, (opts.rotateConcurrency ?? (isNaN(envRotateConc) ? undefined : envRotateConc)) ?? 4);
+  let fi = 0;
+  async function rotateWorker() {
+    while (true) {
+      const idx = fi++;
+      if (idx >= files.length) break;
+      const file = files[idx];
+      const group = byFile.get(file)!;
+      for (const f of group) {
+        const doIt = await shouldApplyForFinding(f);
+        const res = await rotator.rotate(f, {
+          dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
+          template: opts.template,
+          verify: opts.verify,
+        });
+        if (res.success) logger.info(res.message as string);
+        else logger.warn(res.message as string);
+        if (auditor) {
+          await auditor.write({
+            ts: Date.now(),
+            file: f.filePath,
+            line: f.line,
+            column: f.column,
+            match: f.match,
+            rotator: rotator.name,
+            dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
+            verify: opts.verify || false,
+            success: res.success,
+            message: res.message,
+          });
+        }
+      }
     }
   }
+  const workers = Array.from({ length: Math.min(rotateConc, files.length || 1) }, () => rotateWorker());
+  await Promise.all(workers);
   if (auditor) await auditor.close();
   return 0;
 }
