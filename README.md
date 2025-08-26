@@ -3,6 +3,7 @@
 A TypeScript CLI that scans repositories for secret-like patterns and safely rotates them via pluggable rotators.
 
 • Fast recursive scanning with ignore support (.gitignore/.secretignore and CLI globs)
+• ZIP archive scanning (scans text entries inside .zip files)
 • Safe, atomic file updates with backups and rollback
 • Pluggable rotators: dry-run, apply, and backend (file/AWS/Vault)
 • Interactive approval and optional NDJSON audit logging
@@ -274,6 +275,7 @@ Verification: add `--verify` to read back the stored value before modifying file
 - Scanning uses a worker pool. Configure with `--scan-concurrency <n>` or `SENTINEL_SCAN_CONCURRENCY`.
 - Rotations run concurrently but never edit the same file in parallel. Configure with `--rotate-concurrency <n>` or `SENTINEL_ROTATE_CONCURRENCY`.
 - Speed up repeated scans by enabling a persistent scan cache: `--cache <file>` or `SENTINEL_CACHE`.
+- ZIP scanning guardrail: limit entries processed with `SENTINEL_ZIP_MAX_ENTRIES` (default `1000`).
 
 Example (PowerShell):
 
