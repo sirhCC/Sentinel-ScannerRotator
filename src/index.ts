@@ -4,6 +4,7 @@ import { createLogger } from './logger.js';
 import { Command } from 'commander';
 import fs from 'fs/promises';
 import path from 'path';
+import readline from 'readline';
 
 export async function runCli(argsIn: string[]): Promise<number> {
   const program = new Command();
@@ -21,7 +22,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('-L, --list-rotators', 'list available rotators and exit', false)
   .option('-t, --template <tpl>', 'replacement template for apply (supports {{match}}, {{timestamp}}, {{file}})')
   .option('--verify', 'verify backend stores by reading secret back before file update', false)
-  .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators');
+  .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators')
+  .option('-I, --interactive', 'approve each finding interactively', false);
 
   // Add version from package.json if available
   try {
@@ -71,7 +73,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   }
 
   // Require explicit force for apply when not dry-run
-  if (rotator.name === 'apply' && !opts.dryRun && !opts.force) {
+  if (rotator.name === 'apply' && !opts.dryRun && !opts.force && !opts.interactive) {
     logger.error("Refusing to run 'apply' without --dry-run or --force. Use --force to confirm destructive changes.");
     return 3;
   }
@@ -88,11 +90,23 @@ export async function runCli(argsIn: string[]): Promise<number> {
   }
   const findings = await scanPath(target, extraIg, baseDir);
   logger.info(`Found ${findings.length} findings.`);
+  async function shouldApplyForFinding(f: any) {
+    if (!opts.interactive || opts.dryRun) return true;
+    const auto = (process.env.SENTINEL_INTERACTIVE_AUTO || '').toLowerCase();
+    if (auto === 'yes' || auto === 'y' || auto === 'true') return true;
+    if (auto === 'no' || auto === 'n' || auto === 'false') return false;
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const q = (prompt: string) => new Promise<string>((resolve) => rl.question(prompt, resolve));
+    const answer = (await q(`Apply ${rotator.name} to ${f.filePath}:${f.line} match="${f.match}" ? [y/N] `)).trim().toLowerCase();
+    rl.close();
+    return answer === 'y' || answer === 'yes';
+  }
   for (const f of findings) {
+    const doIt = await shouldApplyForFinding(f);
     const res = await rotator.rotate(f, {
-      dryRun: opts.dryRun || rotator.name === 'dry-run',
-  template: opts.template,
-  verify: opts.verify,
+      dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
+      template: opts.template,
+      verify: opts.verify,
     });
     if (res.success) logger.info(res.message as string);
     else logger.warn(res.message as string);
