@@ -1,8 +1,16 @@
-# SecretSentinel-ScannerRotator
+# SecretSentinel Scanner & Rotator
 
-A small TypeScript CLI that scans files for secret-like patterns and supports pluggable rotators (dry-run/apply).
+A TypeScript CLI that scans repositories for secret-like patterns and safely rotates them via pluggable rotators.
 
-Quick start
+• Fast recursive scanning with ignore support (.gitignore/.secretignore and CLI globs)
+• Safe, atomic file updates with backups and rollback
+• Pluggable rotators: dry-run, apply, and backend (file/AWS/Vault)
+• Interactive approval and optional NDJSON audit logging
+• Extensible configuration (JSON/YAML) and custom rotators
+
+Requires Node.js 18+ (recommended) and npm.
+
+## Quick start
 
 1. Install dependencies
 
@@ -10,76 +18,79 @@ Quick start
 npm install
 ```
 
-1. Run in dev mode
+1. Scan in dev mode (no changes)
 
 ```powershell
 npm run dev -- <path-to-scan> --rotator dry-run
 ```
 
-1. Build & run
+1. Build and run
 
 ```powershell
 npm run build
 npm start -- <path-to-scan> --rotator dry-run
 ```
 
-CLI
+## CLI overview
 
-- Help and version
+Help and version:
 
 ```powershell
 npm start -- --help
 npm start -- --version
 ```
 
-- Common flags (short and long forms)
-  - `-r, --rotator <name>`: dry-run | apply
-  - `-d, --dry-run`
-  - `-f, --force`
-  - `-i, --ignore <glob...>` (repeatable)
-  - `-j, --log-json`
-  - `-l, --log-level <error|warn|info|debug>`
-  - `-c, --config <path>`
-  - `-L, --list-rotators` (list available rotators and exit)
-  - `-t, --template <tpl>` (apply replacement template; supports `{{match}}`, `{{timestamp}}`, `{{file}}`)
-  - `--verify` (backend rotator: read-back verification before updating files)
-  - `-I, --interactive` (approve each finding before apply; can auto-answer via `SENTINEL_INTERACTIVE_AUTO` env)
-  - `-x, --rotators-dir <dir...>` (repeatable)
+Key options:
 
-API
+- `-r, --rotator <name>`: dry-run | apply | backend
+- `-d, --dry-run`: report only; don't modify files
+- `-f, --force`: required to apply without --dry-run
+- `-i, --ignore <glob...>`: add ignore pattern(s) (repeatable)
+- `-j, --log-json`: emit JSON logs
+- `-l, --log-level <lvl>`: error | warn | info | debug
+- `-c, --config <path>`: path to a config file or directory
+- `-L, --list-rotators`: list available rotators and exit
+- `-t, --template <tpl>`: replacement template (see tokens below)
+- `--verify`: for backend rotator: read-back before updating files
+- `-I, --interactive`: approve each finding interactively
+- `--audit <path>`: write NDJSON audit events to a file
+- `-x, --rotators-dir <dir...>`: discover additional rotators (repeatable)
 
-- `src/scanner.ts` - scanner that finds secrets
-- `src/rotators` - rotator implementations (dry-run, apply)
-  - Built-in rotators: `dry-run`, `apply`, `backend`
+Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation.
 
-Warning
-
-This tool can mutate files when run with `--rotator apply`. Always run with `--dry-run` first and use `--force` to confirm destructive changes. See `SECURITY.md` for more details.
-
-Tests
-
-```powershell
-npm test
 ## Examples
 
-- List rotators
+List rotators:
 
 ```powershell
 npm start -- --list-rotators
 npm start -- --list-rotators --log-json
 ```
 
-- Apply with a template (dangerous; creates backups in a temp dir)
+Apply with a template (dangerous; creates backups and supports rollback):
 
 ```powershell
 npm start -- . --rotator apply --force --template "__MASKED_{{timestamp}}__"
 ```
 
-## Temp directory and backups
+Interactive approval with audit log:
 
-- By default, backups and temporary files are written under a folder named `.sentinel_tmp` inside the current working directory.
-- You can override this location by setting the environment variable `SENTINEL_TMP_DIR` to any writable directory. This is useful in CI or when running tests in parallel.
-- The `.sentinel_tmp/` directory is already ignored in `.gitignore`.
+```powershell
+npm start -- . --rotator apply --interactive --audit .\audit.ndjson
+```
+
+Backend rotation with verification (file provider):
+
+```powershell
+$env:SENTINEL_BACKEND = 'file'; $env:SENTINEL_BACKEND_FILE = '.sentinel_secrets.json'
+npm start -- . --rotator backend --force --verify --template "{{ref}}"
+```
+
+## Safety: backups and temp directory
+
+- Backups and temporary files live under `.sentinel_tmp` in the current working directory.
+- Override with `SENTINEL_TMP_DIR` to isolate runs (useful in CI or parallel tests).
+- `.sentinel_tmp/` is git-ignored.
 
 Examples:
 
@@ -88,9 +99,28 @@ $env:SENTINEL_TMP_DIR = ".sentinel_tmp_run1"; npm start -- . --rotator apply --f
 Remove-Item -Recurse -Force ".sentinel_tmp_run1"
 ```
 
-Interactive mode
+## Interactive mode
 
-- Use `--interactive` to approve each change. For automation/tests, set `SENTINEL_INTERACTIVE_AUTO` to `yes` or `no` to auto-approve/deny prompts.
+Use `--interactive` to approve each change. For automation/tests, set `SENTINEL_INTERACTIVE_AUTO` to `yes`/`no`/`true`/`false` to auto-approve or deny prompts.
+
+## Audit logging (NDJSON)
+
+Add `--audit <path>` to record an append-only NDJSON stream of events. Each line includes fields like:
+
+```json
+{
+  "ts": 1712345678901,
+  "file": "src/app.ts",
+  "line": 10,
+  "column": 15,
+  "match": "API_KEY=...",
+  "rotator": "apply",
+  "dryRun": false,
+  "verify": true,
+  "success": true,
+  "message": "updated src/app.ts"
+}
+```
 
 ## Template tokens
 
@@ -98,31 +128,29 @@ Supported tokens in `--template`:
 
 - `{{match}}` — the exact matched secret (use with care)
 - `{{timestamp}}` — `Date.now()` value
-- `{{file}}` — the file path containing the secret
-- `{{ref}}` — when using the `backend` rotator, this is the generated secret reference (e.g., `secretref://file/<key>`)
+- `{{file}}` — the file path with the match
+- `{{ref}}` — with `backend` rotator: the generated reference (e.g., `secretref://file/<key>`)
 
 Examples:
 
 ```powershell
-# Safer masking (timestamp + file name)
+# Safer masking (timestamp + file path)
 npm start -- . --rotator apply --force --template "__MASKED_{{file}}_{{timestamp}}__"
 
 # Echo original match (not recommended unless you scrub later)
 npm start -- . --rotator apply --force --template "__REDACTED_{{match}}__"
 ```
 
-
-
 ## Configuration
 
-This tool supports a project-level configuration file to customize detection patterns and behavior. The loader prefers a root config file in the scanned repo and falls back to the bundled defaults in `config/defaults.json`.
+A project-level configuration customizes detection patterns. The loader prefers a root config file in the scanned repo, falling back to `config/defaults.json`.
 
-Supported file names (looked for in the repo root):
+Supported filenames (repo root):
 
 - `.secretsentinel.yaml` (YAML)
 - `.secretsentinel.json` (JSON)
 
-Example JSON config (`.secretsentinel.json`):
+Example JSON (`.secretsentinel.json`):
 
 ```json
 {
@@ -132,7 +160,7 @@ Example JSON config (`.secretsentinel.json`):
 }
 ```
 
-Example YAML config (`.secretsentinel.yaml`):
+Example YAML (`.secretsentinel.yaml`):
 
 ```yaml
 patterns:
@@ -140,42 +168,38 @@ patterns:
     regex: MYAPI_[A-Z0-9]{16}
 ```
 
-Notes
+Notes:
 
-- If `js-yaml` is not installed in the environment, YAML parsing will be skipped and the loader will fall back to JSON/defaults.
-- By default, if a root config file exists it is used; otherwise `config/defaults.json` provides the built-in patterns. If you want a different merge behavior, tell me and I will change the loader to merge root config with defaults.
+- If `js-yaml` isn’t installed, YAML parsing is skipped; JSON/defaults are used.
+- `--config <path>` can point at a file or directory; if a file, its directory is used as the base for lookup.
 
-CLI config flag
+## Ignore rules
 
-- Use `--config <path>` to point the CLI at a specific config file or directory. If a file is provided, its directory is used as the base for config lookup.
+The scanner respects patterns from `.gitignore` and `.secretignore` in the scan root. You can supplement with `--ignore <glob>` (repeatable).
 
-Custom rotators
+## Rotators and extensibility
 
-- The CLI discovers rotators in `src/rotators/` (built-ins) and can also load custom rotators from additional directories via `--rotators-dir <dir>` (repeatable). A rotator must export an object with `name: string` and `rotate(finding, options?) => Promise<{ success: boolean; message?: string }>`.
-- Example: `examples/rotators/exampleRotator.js` — try it:
+Built-in rotators:
 
-```powershell
-npm run build
-npm start -- . --rotators-dir ./examples/rotators --rotator example --dry-run
-```
+- `dry-run` — report what would change
+- `apply` — replace matches in files using a template
+- `backend` — store secrets in a backend and replace with a portable reference
 
-Authoring custom rotators
+Discover custom rotators from additional directories with `--rotators-dir <dir>`.
 
-- A rotator is an object with a `name` and an async `rotate(finding, options?)` method returning `{ success, message? }`.
-- JavaScript example (export any rotator-shaped object):
+Authoring a rotator (JS):
 
 ```js
 // plugins/rotators/myRotator.js
 export const myRotator = {
   name: 'my-rotator',
   async rotate(finding, options) {
-    // implement rotation
     return { success: true, message: `handled ${finding.filePath}:${finding.line}` };
   }
 };
 ```
 
-- TypeScript example using helper types:
+Authoring a rotator (TS):
 
 ```ts
 // plugins/rotators/myRotator.ts
@@ -189,30 +213,30 @@ export const myRotator: Rotator = defineRotator({
 });
 ```
 
-- Run with your rotator directory:
+Run with your rotator directory:
 
 ```powershell
-npm start -- . --rotators-dir ./plugins/rotators --rotator my-rotator --dry-run
+npm run build
+npm start -- . --rotators-dir .\plugins\rotators --rotator my-rotator --dry-run
 ```
 
 ## Backend rotator
 
-The `backend` rotator stores the matched secret in a backend and replaces it in the file with a reference like `secretref://<provider>/<key>`.
+The `backend` rotator stores the matched secret and replaces it with a reference like `secretref://<provider>/<key>`.
 
-Providers
+Providers:
 
-- file (default): stores a JSON map in `.sentinel_secrets.json` (override with `SENTINEL_BACKEND_FILE`).
-- aws (optional): uses AWS Secrets Manager. Requires installing `@aws-sdk/client-secrets-manager` and setting `AWS_REGION` or `AWS_DEFAULT_REGION`.
-- vault (optional): uses HashiCorp Vault KV v2 via HTTP (global fetch). Requires `VAULT_ADDR` and `VAULT_TOKEN`. Optional `SENTINEL_VAULT_MOUNT` (default `secret`) and `SENTINEL_VAULT_PATH` (default `sentinel`).
-  - Supports `VAULT_NAMESPACE` header when set.
+- file (default): JSON map in `.sentinel_secrets.json` (override with `SENTINEL_BACKEND_FILE`).
+- aws (optional): AWS Secrets Manager (install `@aws-sdk/client-secrets-manager`; set `AWS_REGION` or `AWS_DEFAULT_REGION`).
+- vault (optional): HashiCorp Vault KV v2 via HTTP (uses global `fetch`). Requires `VAULT_ADDR` and `VAULT_TOKEN`. Optional `SENTINEL_VAULT_MOUNT` (default `secret`) and `SENTINEL_VAULT_PATH` (default `sentinel`). Supports `VAULT_NAMESPACE`.
 
-Environment variables
+Environment variables:
 
-- `SENTINEL_BACKEND` — `file` (default) or `aws`.
-- `SENTINEL_BACKEND_FILE` — path to the JSON secrets file for file backend.
-- `SENTINEL_BACKEND_PREFIX` — optional prefix for AWS secret names.
+- `SENTINEL_BACKEND` — `file` (default), `aws`, or `vault`.
+- `SENTINEL_BACKEND_FILE` — JSON secrets file path for file backend.
+- `SENTINEL_BACKEND_PREFIX` — optional AWS secret name prefix.
 
-Examples
+Examples:
 
 ```powershell
 # File backend (default)
@@ -226,8 +250,36 @@ npm start -- . --rotator backend --force
 
 # HashiCorp Vault (KV v2)
 $env:SENTINEL_BACKEND = 'vault'; $env:VAULT_ADDR = 'http://127.0.0.1:8200'; $env:VAULT_TOKEN = '<token>'
-# optional overrides: $env:SENTINEL_VAULT_MOUNT = 'secret'; $env:SENTINEL_VAULT_PATH = 'sentinel'
+# optional: $env:SENTINEL_VAULT_MOUNT = 'secret'; $env:SENTINEL_VAULT_PATH = 'sentinel'; $env:VAULT_NAMESPACE = 'myns'
 npm start -- . --rotator backend --force
 ```
+
+Verification: add `--verify` to read back the stored value before modifying files.
+
+## Development
+
+Build, test, lint, and format:
+
+```powershell
+npm run build
+npm test
+npm run lint
+npm run format
+```
+
+Run locally (dev):
+
+```powershell
+npm run dev -- . --rotator dry-run
+```
+
+## Security and safety
+
+- This tool can modify files when not in `--dry-run`. Prefer dry-runs first and require `--force` (or `--interactive`).
+- Review `SECURITY.md` for threat model and operational guidance.
+
+## License
+
+MIT License. See `LICENSE`.
 
 
