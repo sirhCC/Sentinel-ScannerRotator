@@ -66,7 +66,9 @@ Legend:
 4. Add concurrent scanning and rotator throttling for performance on large repos (worker pool size, rate-limiting rotator calls).
 	- 🟥 [DONE 2025-08-25] Added scan concurrency (worker pool with `--scan-concurrency` / `SENTINEL_SCAN_CONCURRENCY`) and rotation concurrency (grouped by file to avoid parallel edits; `--rotate-concurrency` / `SENTINEL_ROTATE_CONCURRENCY`). Tests added for parity.
 5. Add an option to persist findings to an output format (JSON/CSV) for integrations with ticketing/alerting.
-6. Add caching to avoid re-scanning unchanged files (file mtime + hash cache) to speed repeated runs.
+	- 🟥 [DONE 2025-08-25] Added `--out` and `--out-format` to export findings as JSON or CSV (with extension inference). Docs and tests included.
+6. Add caching to avoid re-scanning unchanged files (file mtime + size cache) to speed repeated runs.
+	- 🟥 [DONE 2025-08-26] Added persistent cache with `--cache <file>` or `SENTINEL_CACHE` env; integrates into scanner to reuse findings when mtime/size unchanged. Tests added (`test/cache.test.ts`).
 
 ## P3 — Lower priority (polish & enterprise features)
 
