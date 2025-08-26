@@ -2,10 +2,12 @@ import fs from "fs/promises";
 import path from "path";
 import { Finding } from "./types.js";
 import { loadIgnorePatterns } from "./ignore.js";
+import { loadCache, saveCache, CacheData } from './cache.js';
 import { loadPatterns } from "./config.js";
 
 type ScanOptions = {
   concurrency?: number;
+  cachePath?: string;
 };
 
 async function loadSecretRegexes(baseDir?: string) {
@@ -30,15 +32,49 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   await walkDirCollect(targetPath, ig as { ignores: (p: string) => boolean }, files);
   const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
   const conc = Math.max(1, (options?.concurrency ?? (isNaN(envConc) ? undefined : envConc)) ?? 8);
+  // Load cache if configured
+  const cachePath = options?.cachePath || process.env.SENTINEL_CACHE || '';
+  let cache: CacheData | undefined;
+  if (cachePath) {
+    cache = await loadCache(cachePath);
+  }
   const out: Finding[] = [];
   // simple worker pool
   let idx = 0;
+  const scannedKeys = new Set<string>();
   async function worker() {
     while (true) {
       const i = idx++;
       if (i >= files.length) break;
       try {
-  const r = await scanFile(files[i], baseDir);
+        const file = files[i];
+        if (cache) {
+          try {
+            const st = await fs.stat(file);
+            const key = path.relative(baseDir!, file);
+            scannedKeys.add(key);
+            const ce = cache.entries[key];
+            if (ce && ce.mtimeMs === st.mtimeMs && ce.size === st.size) {
+              out.push(...ce.findings);
+              continue;
+            }
+            const r = await scanFile(file, baseDir);
+            out.push(...r);
+            cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r };
+            continue;
+          } catch {
+            // fall through to no-cache path
+          }
+        }
+        const r = await scanFile(file, baseDir);
+        if (cache) {
+          try {
+            const st = await fs.stat(file);
+            const key = path.relative(baseDir!, file);
+            scannedKeys.add(key);
+            cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r };
+          } catch {}
+        }
         out.push(...r);
       } catch {
         // ignore
@@ -47,6 +83,13 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   }
   const workers = Array.from({ length: Math.min(conc, files.length || 1) }, () => worker());
   await Promise.all(workers);
+  if (cachePath && cache) {
+    // prune stale entries not part of this scan
+    for (const k of Object.keys(cache.entries)) {
+      if (!scannedKeys.has(k)) delete cache.entries[k];
+    }
+    try { await saveCache(cachePath, cache); } catch {}
+  }
   return out;
 }
 
