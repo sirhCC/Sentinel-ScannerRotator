@@ -4,6 +4,8 @@ A TypeScript CLI that scans repositories for secret-like patterns and safely rot
 
 • Fast recursive scanning with ignore support (.gitignore/.secretignore and CLI globs)
 • ZIP archive scanning (scans text entries inside .zip files)
+• TAR.GZ archive scanning (scans text entries inside .tar.gz/.tgz files)
+• .env and Dockerfile-aware scanners (key=value, ENV/ARG heuristics)
 • Safe, atomic file updates with backups and rollback
 • Pluggable rotators: dry-run, apply, and backend (file/AWS/Vault)
 • Interactive approval and optional NDJSON audit logging
@@ -60,8 +62,10 @@ Key options:
 - `--rotate-concurrency <n>`: concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)
 - `--out <file>`: write scan findings (JSON or CSV; inferred from extension)
 - `--out-format <fmt>`: json | csv (overrides extension inference)
+- `--cache <path>`: persist scan cache to a file (or use SENTINEL_CACHE)
+- `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
 
-Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation.
+Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation; 4 failed due to findings (with --fail-on-findings).
 
 ## Examples
 
@@ -96,6 +100,14 @@ Export findings to JSON or CSV:
 ```powershell
 npm start -- . --rotator dry-run --out .\findings.json
 npm start -- . --rotator dry-run --out .\findings.csv --out-format csv
+```
+
+Fail a CI step if findings are detected (threshold 0 by default):
+
+```powershell
+npm start -- . --rotator dry-run --fail-on-findings
+# or allow up to N findings
+npm start -- . --rotator dry-run --fail-on-findings --fail-threshold 2
 ```
 
 ## Safety: backups and temp directory
@@ -275,7 +287,10 @@ Verification: add `--verify` to read back the stored value before modifying file
 - Scanning uses a worker pool. Configure with `--scan-concurrency <n>` or `SENTINEL_SCAN_CONCURRENCY`.
 - Rotations run concurrently but never edit the same file in parallel. Configure with `--rotate-concurrency <n>` or `SENTINEL_ROTATE_CONCURRENCY`.
 - Speed up repeated scans by enabling a persistent scan cache: `--cache <file>` or `SENTINEL_CACHE`.
-- ZIP scanning guardrail: limit entries processed with `SENTINEL_ZIP_MAX_ENTRIES` (default `1000`).
+- Archive scanning:
+  - Toggle on/off for all archives with `SENTINEL_SCAN_ARCHIVES` ("false"/"0"/"no" disables).
+  - ZIP guardrails: `SENTINEL_ZIP_MAX_ENTRIES` (default 1000), `SENTINEL_ZIP_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_ZIP_MAX_BYTES` (default 10 MiB).
+  - TAR.GZ guardrails: `SENTINEL_TAR_MAX_ENTRIES` (default 1000), `SENTINEL_TAR_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_TAR_MAX_BYTES` (default 10 MiB).
 
 Example (PowerShell):
 
