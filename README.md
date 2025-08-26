@@ -55,6 +55,8 @@ Key options:
 - `-I, --interactive`: approve each finding interactively
 - `--audit <path>`: write NDJSON audit events to a file
 - `-x, --rotators-dir <dir...>`: discover additional rotators (repeatable)
+- `--scan-concurrency <n>`: concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)
+- `--rotate-concurrency <n>`: concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation.
 
@@ -257,6 +259,11 @@ npm start -- . --rotator backend --force
 ```
 
 Verification: add `--verify` to read back the stored value before modifying files.
+
+## Performance: concurrency and throttling
+
+- Scanning uses a worker pool. Configure with `--scan-concurrency <n>` or `SENTINEL_SCAN_CONCURRENCY`.
+- Rotations run concurrently but never edit the same file in parallel. Configure with `--rotate-concurrency <n>` or `SENTINEL_ROTATE_CONCURRENCY`.
 
 ## Development
 
