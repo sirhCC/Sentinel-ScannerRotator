@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import tar from 'tar-stream';
 import zlib from 'zlib';
 import { Finding } from '../types.js';
-import { loadPatterns } from '../config.js';
+import { loadRules } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
 
 export type ScannerPlugin = {
@@ -15,22 +15,15 @@ export type ScannerPlugin = {
 };
 
 async function loadSecretRegexes(baseDir?: string) {
-  const defs = await loadPatterns(baseDir);
-  const builtins = [
-    { name: 'AWS Access Key ID', re: /AKIA[0-9A-Z]{16}/g },
-    { name: 'Generic API Key', re: /(?:api_key|apikey|api-key)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{16,})/gi },
-    { name: 'JWT-Like', re: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g },
-  ];
-  if (defs.length === 0) return builtins;
-  const custom = defs.map((d) => ({ name: d.name, re: new RegExp(d.regex, 'g') }));
-  return builtins.concat(custom);
+  const rules = await loadRules(baseDir);
+  return rules;
 }
 
 export const textScanner: ScannerPlugin = {
   name: 'text',
   supports: () => true, // fallback for regular files
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
-    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
@@ -48,6 +41,8 @@ export const textScanner: ScannerPlugin = {
             column: m.index + 1,
             match: m[0],
             context: line.trim().slice(0, 200),
+            ruleName: s.name,
+            severity: s.severity,
           });
         }
       }
@@ -79,7 +74,7 @@ export const envScanner: ScannerPlugin = {
     return b === '.env' || b.startsWith('.env.') || b.endsWith('.env');
   },
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
-    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
@@ -92,7 +87,7 @@ export const envScanner: ScannerPlugin = {
         let m: RegExpExecArray | null;
         const re = new RegExp(s.re.source, s.re.flags);
         while ((m = re.exec(line)) !== null) {
-          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200) });
+          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
       // sensitive key heuristics
@@ -132,7 +127,7 @@ export const dockerScanner: ScannerPlugin = {
         let m: RegExpExecArray | null;
         const re = new RegExp(s.re.source, s.re.flags);
         while ((m = re.exec(line)) !== null) {
-          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200) });
+          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
       // ENV/ARG key=value
@@ -188,7 +183,7 @@ export const zipScanner: ScannerPlugin = {
       const lines = content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        for (const s of SECRET_REGEXES) {
+    for (const s of SECRET_REGEXES) {
           let m: RegExpExecArray | null;
           const re = new RegExp(s.re.source, s.re.flags);
           while ((m = re.exec(line)) !== null) {
@@ -197,7 +192,9 @@ export const zipScanner: ScannerPlugin = {
               line: i + 1,
               column: m.index + 1,
               match: m[0],
-              context: line.trim().slice(0, 200),
+      context: line.trim().slice(0, 200),
+      ruleName: s.name,
+      severity: s.severity,
             });
           }
         }
@@ -216,7 +213,7 @@ export const tarGzScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
     if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
-    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
@@ -253,7 +250,7 @@ export const tarGzScanner: ScannerPlugin = {
           const lines = content.split(/\r?\n/);
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            for (const s of SECRET_REGEXES) {
+    for (const s of SECRET_REGEXES) {
               let m: RegExpExecArray | null;
               const re = new RegExp(s.re.source, s.re.flags);
               while ((m = re.exec(line)) !== null) {
@@ -262,7 +259,9 @@ export const tarGzScanner: ScannerPlugin = {
                   line: i + 1,
                   column: m.index + 1,
                   match: m[0],
-                  context: line.trim().slice(0, 200),
+      context: line.trim().slice(0, 200),
+      ruleName: s.name,
+      severity: s.severity,
                 });
               }
             }
