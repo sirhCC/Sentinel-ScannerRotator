@@ -4,6 +4,8 @@ export type Finding = {
   column: number;
   match: string;
   context?: string;
+  ruleName?: string;
+  severity?: 'low' | 'medium' | 'high';
 };
 
 export interface Rotator {
