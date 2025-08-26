@@ -4,6 +4,10 @@ import { Finding } from "./types.js";
 import { loadIgnorePatterns } from "./ignore.js";
 import { loadPatterns } from "./config.js";
 
+type ScanOptions = {
+  concurrency?: number;
+};
+
 async function loadSecretRegexes(baseDir?: string) {
   const defs = await loadPatterns(baseDir);
   const builtins = [
@@ -16,37 +20,46 @@ async function loadSecretRegexes(baseDir?: string) {
   return builtins.concat(custom);
 }
 
-export async function scanPath(targetPath: string, extraIg?: string[], baseDir?: string): Promise<Finding[]> {
+export async function scanPath(targetPath: string, extraIg?: string[], baseDir?: string, options?: ScanOptions): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
   if (!baseDir) baseDir = stats.isFile() ? path.dirname(targetPath) : targetPath;
   if (stats.isFile()) return scanFile(targetPath, baseDir);
 
   const ig = await loadIgnorePatterns(targetPath, extraIg);
-  const results: Finding[] = [];
-  await walkDir(targetPath, ig as { ignores: (p: string) => boolean }, results, baseDir);
-  return results;
+  const files: string[] = [];
+  await walkDirCollect(targetPath, ig as { ignores: (p: string) => boolean }, files);
+  const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
+  const conc = Math.max(1, (options?.concurrency ?? (isNaN(envConc) ? undefined : envConc)) ?? 8);
+  const out: Finding[] = [];
+  // simple worker pool
+  let idx = 0;
+  async function worker() {
+    while (true) {
+      const i = idx++;
+      if (i >= files.length) break;
+      try {
+  const r = await scanFile(files[i], baseDir);
+        out.push(...r);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(conc, files.length || 1) }, () => worker());
+  await Promise.all(workers);
+  return out;
 }
 
-async function walkDir(
-  dir: string,
-  ig: { ignores: (p: string) => boolean },
-  results: Finding[],
-  baseDir: string,
-) {
+async function walkDirCollect(dir: string, ig: { ignores: (p: string) => boolean }, files: string[]) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
     const rel = path.relative(process.cwd(), full);
     if (ig.ignores(rel)) continue;
     if (e.isDirectory()) {
-      await walkDir(full, ig, results, baseDir);
+      await walkDirCollect(full, ig, files);
     } else if (e.isFile()) {
-      try {
-        const r = await scanFile(full, baseDir);
-        results.push(...r);
-      } catch {
-        // ignore read errors
-      }
+      files.push(full);
     }
   }
 }
