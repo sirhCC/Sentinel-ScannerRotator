@@ -48,4 +48,20 @@ describe('backend rotator (file provider)', () => {
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
   });
+
+  it('vault provider dry-run includes ref token without network', async () => {
+    const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+    process.env.SENTINEL_TMP_DIR = uniqueTmp;
+    process.env.SENTINEL_BACKEND = 'vault';
+    const f = 'tmp-backend-vault-dry.txt';
+    fs.writeFileSync(f, 'xx AKIAABCDEFGHIJKLMNOP yy');
+    const { backendRotator } = await import('../src/rotators/backendRotator');
+    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any, { dryRun: true, template: '__REF_{{ref}}__' });
+    expect(res.success).toBe(true);
+    expect(res.message).toMatch(/Would store secret and replace/);
+    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
+    try { fs.unlinkSync(f); } catch {}
+    delete process.env.SENTINEL_TMP_DIR;
+    delete process.env.SENTINEL_BACKEND;
+  });
 });
