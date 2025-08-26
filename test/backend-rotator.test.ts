@@ -31,6 +31,30 @@ describe('backend rotator (file provider)', () => {
     delete process.env.SENTINEL_BACKEND_FILE;
   });
 
+  it('verify mode reads back stored secret (file backend)', async () => {
+    const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+    process.env.SENTINEL_TMP_DIR = uniqueTmp;
+    const backendFile = path.join(process.cwd(), `.sentinel_secrets_${Date.now()}.json`);
+    process.env.SENTINEL_BACKEND = 'file';
+    process.env.SENTINEL_BACKEND_FILE = backendFile;
+    const f = 'tmp-backend-verify.txt';
+    fs.writeFileSync(f, 'abc AKIAABCDEFGHIJKLMNOP def');
+    const { backendRotator } = await import('../src/rotators/backendRotator');
+    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any, { verify: true });
+    expect(res.success).toBe(true);
+    const content = fs.readFileSync(f, 'utf8');
+    expect(content).toMatch(/secretref:\/\/file\//);
+    const map = JSON.parse(fs.readFileSync(backendFile, 'utf8'));
+    const values = Object.values(map as any);
+    expect(values).toContain('AKIAABCDEFGHIJKLMNOP');
+    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
+    try { fs.unlinkSync(f); } catch {}
+    try { fs.unlinkSync(backendFile); } catch {}
+    delete process.env.SENTINEL_TMP_DIR;
+    delete process.env.SENTINEL_BACKEND;
+    delete process.env.SENTINEL_BACKEND_FILE;
+  });
+
   it('dry-run reports would replace with ref', async () => {
     const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
     process.env.SENTINEL_TMP_DIR = uniqueTmp;
