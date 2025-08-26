@@ -28,10 +28,13 @@ export async function loadRotators(opts: LoaderOptions = {}): Promise<Rotator[]>
   try {
     const mod1: any = await import('./dryRunRotator.js');
     const mod2: any = await import('./applyRotator.js');
+  const mod3: any = await import('./backendRotator.js');
     const dr = mod1?.dryRunRotator;
     const ap = mod2?.applyRotator;
+  const bk = mod3?.backendRotator;
     if (dr && !loaded[dr.name]) loaded[dr.name] = dr;
     if (ap && !loaded[ap.name]) loaded[ap.name] = ap;
+  if (bk && !loaded[bk.name]) loaded[bk.name] = bk;
   } catch {
     // ignore
   }
