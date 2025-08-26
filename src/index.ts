@@ -20,6 +20,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('-c, --config <path>', 'path to a config file or directory')
   .option('-L, --list-rotators', 'list available rotators and exit', false)
   .option('-t, --template <tpl>', 'replacement template for apply (supports {{match}}, {{timestamp}}, {{file}})')
+  .option('--verify', 'verify backend stores by reading secret back before file update', false)
   .option('-x, --rotators-dir <dir...>', 'additional directories to discover rotators');
 
   // Add version from package.json if available
@@ -90,7 +91,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   for (const f of findings) {
     const res = await rotator.rotate(f, {
       dryRun: opts.dryRun || rotator.name === 'dry-run',
-      template: opts.template,
+  template: opts.template,
+  verify: opts.verify,
     });
     if (res.success) logger.info(res.message as string);
     else logger.warn(res.message as string);
