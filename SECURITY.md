@@ -1,5 +1,21 @@
 # Security policy
 
+## Table of contents
+
+- Reporting vulnerabilities
+- Safe usage guidelines
+- Backends and secret handling
+- Audit logging
+- Temporary files and backups
+- Data handling and logging
+- Least privilege and operational posture
+- Scope and threat model
+- Supported versions
+- Operational hardening checklist
+- CI/CD guidance
+- Known limitations
+- Contact
+
 ## Reporting vulnerabilities
 
 Please report suspected vulnerabilities privately using GitHub’s security advisories for this repository (preferred). Include:
@@ -71,3 +87,44 @@ Note: Audit events are not signed or tamper-evident. If you require integrity gu
 ## Contact
 
 Use GitHub security advisories for private reports. For general questions, open a normal issue without sensitive details.
+
+## Scope and threat model
+
+In scope:
+
+- Scanning text files in a working tree for secret-like patterns
+- Local file replacement using safe, atomic updates with backups
+- Optional storage of secrets in a configured backend (file/AWS/Vault)
+
+Out of scope (examples):
+
+- Supply-chain protection (npm/package integrity, OS hardening)
+- Scanning inside archives, containers, or remote systems
+- Cryptographic guarantees for audit logs (no built-in signatures yet)
+- Automatic key rotation or revocation policies in backends
+
+Assumptions:
+
+- You control the workstation/runner and its filesystem permissions
+- You can provision least-privilege credentials for cloud backends
+
+## Supported versions
+
+- Pre-1.0: security fixes land on the main branch; backports are best-effort only.
+- Pin to a specific commit or tag for regulated environments and review diffs before upgrades.
+
+## Operational hardening checklist
+
+- Run with `--dry-run` first; review findings and logs
+- Use `--interactive` in manual sessions; `--force` only in tightly controlled runs
+- Set `SENTINEL_TMP_DIR` to an isolated path; purge it after runs
+- Prefer `{{ref}}` templates with the backend rotator; avoid emitting `{{match}}`
+- Lock down audit files created via `--audit` and rotate/delete per policy
+- Use minimal IAM/Vault policies scoped to required prefixes/paths
+
+## CI/CD guidance
+
+- Isolate workspace and temp dir (e.g., `SENTINEL_TMP_DIR=$CI_TMP/sentinel`)
+- Mask `VAULT_TOKEN`, AWS credentials, and any secret envs in pipeline logs
+- Store audit artifacts in a restricted location or skip `--audit` if not needed
+- Avoid scanning large monorepos by default; target subpaths and use `--ignore`
