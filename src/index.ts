@@ -127,12 +127,35 @@ export async function runCli(argsIn: string[]): Promise<number> {
   await exportFindingsIfRequested();
   // CI guard: optionally fail fast on findings, skipping rotations
   if (opts.failOnFindings) {
+    // Load optional project policy
+    let policy: any;
+    try {
+      const { loadPolicy } = await import('./policy.js');
+      policy = await loadPolicy(baseDir);
+    } catch {}
     // Per-severity thresholds (only enforced if provided)
     const sevCounts = findings.reduce((acc: Record<string, number>, f: any) => {
       const sev = (f.severity || 'medium').toLowerCase();
       acc[sev] = (acc[sev] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
+    // Forbidden rules
+    if (policy?.forbidRules && Array.isArray(policy.forbidRules) && policy.forbidRules.length) {
+      const hit = findings.find((f: any) => f.ruleName && policy.forbidRules.includes(f.ruleName));
+      if (hit) {
+        logger.error(`Failing due to forbidden rule matched: ${hit.ruleName} in ${hit.filePath}:${hit.line}`);
+        return 4;
+      }
+    }
+    // Minimum severity gate
+    if (policy?.minSeverity) {
+      const order = { low: 1, medium: 2, high: 3 } as Record<string, number>;
+      const minRank = order[String(policy.minSeverity).toLowerCase()] || 0;
+      const anyAtLeast = findings.some((f: any) => (order[String((f.severity || 'medium')).toLowerCase()] || 0) >= minRank);
+      if (anyAtLeast && minRank > 0) {
+        // continue to threshold checks; minSeverity is a filter gate not a direct fail
+      }
+    }
     const checkSev = (name: 'high'|'medium'|'low', thr: number | undefined) => {
       if (!Number.isFinite(thr)) return false;
       const n = sevCounts[name] || 0;
@@ -142,9 +165,12 @@ export async function runCli(argsIn: string[]): Promise<number> {
       }
       return false;
     };
-    const tripped = checkSev('high', opts.failThresholdHigh) || checkSev('medium', opts.failThresholdMedium) || checkSev('low', opts.failThresholdLow);
+    const thrHigh = Number.isFinite(opts.failThresholdHigh) ? opts.failThresholdHigh : policy?.thresholds?.high;
+    const thrMed = Number.isFinite(opts.failThresholdMedium) ? opts.failThresholdMedium : policy?.thresholds?.medium;
+    const thrLow = Number.isFinite(opts.failThresholdLow) ? opts.failThresholdLow : policy?.thresholds?.low;
+    const tripped = checkSev('high', thrHigh) || checkSev('medium', thrMed) || checkSev('low', thrLow);
     if (tripped) return 4;
-    const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : 0;
+    const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : (policy?.thresholds?.total ?? 0);
     if (findings.length > threshold) {
       logger.error(`Failing due to findings (${findings.length}) exceeding threshold (${threshold}).`);
       return 4;
