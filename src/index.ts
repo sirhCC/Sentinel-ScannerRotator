@@ -111,7 +111,7 @@ export async function runCli(argsIn: string[]): Promise<number> {
     const inferFmt = (p: string) => (p.toLowerCase().endsWith('.csv') ? 'csv' : 'json');
     const fmt: 'json' | 'csv' = (opts.outFormat || inferFmt(outPath)).toLowerCase();
     if (fmt === 'json') {
-      const minimized = findings.map((f: any) => ({ file: f.filePath, line: f.line, column: f.column, match: f.match }));
+      const minimized = findings.map((f: any) => ({ file: f.filePath, line: f.line, column: f.column, match: f.match, rule: f.ruleName, severity: f.severity }));
       await fs.writeFile(outPath, JSON.stringify(minimized, null, 2), 'utf8');
     } else {
       const header = 'file,line,column,match\n';
