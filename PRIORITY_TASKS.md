@@ -57,8 +57,8 @@ Legend:
 1. Rotator integrations: implement connectors for at least one secret backend (e.g., AWS Secrets Manager or Vault) as an example `apply` rotator.
 	- 🟥 [DONE 2025-08-25] Implemented `backend` rotator with file provider (default) and optional AWS Secrets Manager (SDK optional, lazy-loaded). Docs updated.
 	- Follow-ups:
-		- Add HashiCorp Vault provider (token/addr envs) with parity to AWS provider.
-		- Add CLI e2e test path using `--rotator backend` (file provider) in addition to unit tests.
+		- 🟥 [DONE 2025-08-26] Added HashiCorp Vault provider (KV v2) with optional VAULT_NAMESPACE and verify mode parity.
+		- 🟥 [DONE 2025-08-26] Added CLI e2e test path using `--rotator backend` (file provider): `test/e2e-backend.test.ts`.
 2. Add interactive mode for review: show findings in an interactive TUI (fuzzy-select) to approve per-finding rotations.
 	- 🟥 [DONE 2025-08-25] Added `--interactive` flag with per-finding approval and `SENTINEL_INTERACTIVE_AUTO` for automation.
 3. Add permissions and dry-run audit logs: produce a signed audit artifact describing changes that would be made and what was changed when applied.
@@ -71,14 +71,25 @@ Legend:
 	- 🟥 [DONE 2025-08-26] Added persistent cache with `--cache <file>` or `SENTINEL_CACHE` env; integrates into scanner to reuse findings when mtime/size unchanged. Tests added (`test/cache.test.ts`).
 	- 🟥 [DONE 2025-08-26] Added optional hash mode (`SENTINEL_CACHE_MODE=hash`) to validate cache hits with SHA-256 and store content hashes; default remains `mtime`.
 
+7. Add CI gating flags to fail the pipeline on findings.
+	- 🟥 [DONE 2025-08-26] Added `--fail-on-findings` and `--fail-threshold` with documented non-zero exit codes; tests in `test/cli.test.ts`.
+
 ## P3 — Lower priority (polish & enterprise features)
 
 1. Add ruleset library and rule marketplace (curated regexes, entropy checks, ML model hook) — long-term.
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
 4. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
-	- 🟨 [IN PROGRESS 2025-08-25] Scanner plugin system added; ZIP archives supported (text entries). Further formats TBD.
-5. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
+	- 🟨 [IN PROGRESS 2025-08-26] Scanner plugin system added; specialized scanners implemented:
+		- ZIP archives (text entries only; guarded by size/entry limits)
+		- TAR.GZ archives (text entries only; guarded by limits)
+		- `.env` files (key=value heuristics)
+		- Dockerfiles (ENV/ARG heuristics)
+	- Remaining: selective binary scanning and additional formats (e.g., .7z); evaluation needed.
+
+5. Add Jupyter Notebook extension (nbextension) to scan notebook cells client-side and surface findings in the UI.
+	- 🟨 [IN PROGRESS 2025-08-26] Minimal classic Notebook extension scaffolded under `examples/nbext/` with toolbar scan button and findings dialog.
+6. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
 
 ## Nice-to-have / Wish list
 
