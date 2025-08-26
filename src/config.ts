@@ -3,7 +3,7 @@ import path from 'path';
 // use dynamic import for js-yaml to avoid static type resolution failures when
 // the package's types are not installed in the environment.
 
-export type PatternDef = { name: string; regex: string };
+export type PatternDef = { name: string; regex: string; severity?: 'low'|'medium'|'high'; enabled?: boolean };
 
 export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
   const cwd = baseDir || process.cwd();
