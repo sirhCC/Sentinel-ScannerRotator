@@ -52,12 +52,13 @@ This file is a single, ordered list of work to do for the project. Highest prior
 	- [DONE 2025-08-25] Implemented `backend` rotator with file provider (default) and optional AWS Secrets Manager (SDK optional, lazy-loaded). Docs updated.
 	- Follow-ups:
 		- Add HashiCorp Vault provider (token/addr envs) with parity to AWS provider.
-		- Add CLI e2e test path using `--rotator backend` (file provider) in addition to unit tests.
+	- Add CLI e2e test path using `--rotator backend` (file provider) in addition to unit tests.
 2. Add interactive mode for review: show findings in an interactive TUI (fuzzy-select) to approve per-finding rotations.
 	- [DONE 2025-08-25] Added `--interactive` flag with per-finding approval and `SENTINEL_INTERACTIVE_AUTO` for automation.
 3. Add permissions and dry-run audit logs: produce a signed audit artifact describing changes that would be made and what was changed when applied.
 	- [DONE 2025-08-25] Added NDJSON audit logging (`--audit`). Each event includes a SHA-256 hash; optional HMAC-SHA256 signature via `SENTINEL_AUDIT_SIGN_KEY` and `SENTINEL_AUDIT_SIGN_KEY_ID`.
 4. Add concurrent scanning and rotator throttling for performance on large repos (worker pool size, rate-limiting rotator calls).
+	- [DONE 2025-08-25] Added scan concurrency (worker pool with `--scan-concurrency` / `SENTINEL_SCAN_CONCURRENCY`) and rotation concurrency (grouped by file to avoid parallel edits; `--rotate-concurrency` / `SENTINEL_ROTATE_CONCURRENCY`). Tests added for parity.
 5. Add an option to persist findings to an output format (JSON/CSV) for integrations with ticketing/alerting.
 6. Add caching to avoid re-scanning unchanged files (file mtime + hash cache) to speed repeated runs.
 
