@@ -322,6 +322,10 @@ Run locally (dev):
 npm run dev -- . --rotator dry-run
 ```
 
+## Jupyter Notebook extension (example)
+
+A minimal classic Notebook nbextension lives in `examples/nbext/`. It adds a toolbar button that scans cells for common secret patterns client-side and shows findings. See `examples/nbext/README.md` for install instructions.
+
 ## Security and safety
 
 - This tool can modify files when not in `--dry-run`. Prefer dry-runs first and require `--force` (or `--interactive`).
