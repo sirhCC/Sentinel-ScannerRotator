@@ -76,6 +76,7 @@ Legend:
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
 4. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
+	- 🟨 [IN PROGRESS 2025-08-25] Scanner plugin system added; ZIP archives supported (text entries). Further formats TBD.
 5. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
 
 ## Nice-to-have / Wish list
