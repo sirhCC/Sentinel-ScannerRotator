@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import JSZip from 'jszip';
+import tar from 'tar-stream';
+import zlib from 'zlib';
 import { Finding } from '../types.js';
 import { loadPatterns } from '../config.js';
 
@@ -173,11 +176,90 @@ export const zipScanner: ScannerPlugin = {
   },
 };
 
+export const tarGzScanner: ScannerPlugin = {
+  name: 'targz',
+  supports(filePath: string) {
+    const l = filePath.toLowerCase();
+    return l.endsWith('.tar.gz') || l.endsWith('.tgz');
+  },
+  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+    const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
+    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
+    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    const findings: Finding[] = [];
+    const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
+    const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
+    const maxBytes = Number(process.env.SENTINEL_TAR_MAX_BYTES || '10485760'); // 10 MiB
+    let count = 0;
+    let totalBytes = 0;
+    await new Promise<void>((resolve, reject) => {
+      const extract = tar.extract();
+      extract.on('entry', (header: { name: string; type: string; size?: number }, stream: NodeJS.ReadableStream, next: () => void) => {
+        if (count++ >= maxEntries) {
+          stream.resume();
+          return next();
+        }
+        if (header.type !== 'file') {
+          stream.resume();
+          return next();
+        }
+        if (header.size && header.size > maxEntryBytes) {
+          stream.resume();
+          return next();
+        }
+        const parts: Buffer[] = [];
+        let entryBytes = 0;
+        stream.on('data', (chunk: Buffer) => {
+          entryBytes += chunk.length;
+          if (entryBytes <= maxEntryBytes && totalBytes + entryBytes <= maxBytes) parts.push(chunk);
+        });
+        stream.on('end', () => {
+          if (entryBytes > maxEntryBytes || totalBytes + entryBytes > maxBytes) {
+            return next();
+          }
+          totalBytes += entryBytes;
+          const content = Buffer.concat(parts).toString('utf8');
+          const lines = content.split(/\r?\n/);
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            for (const s of SECRET_REGEXES) {
+              let m: RegExpExecArray | null;
+              const re = new RegExp(s.re.source, s.re.flags);
+              while ((m = re.exec(line)) !== null) {
+                findings.push({
+                  filePath: `${filePath}:${header.name}`,
+                  line: i + 1,
+                  column: m.index + 1,
+                  match: m[0],
+                  context: line.trim().slice(0, 200),
+                });
+              }
+            }
+          }
+          next();
+        });
+        stream.on('error', (_e: unknown) => {
+          // skip file on error
+          next();
+        });
+      });
+      extract.on('finish', () => resolve());
+      extract.on('error', (e: unknown) => reject(e instanceof Error ? e : new Error(String(e))));
+      const gunzip = zlib.createGunzip();
+      gunzip.on('error', (e: unknown) => reject(e instanceof Error ? e : new Error(String(e))));
+      const rs = fsSync.createReadStream(filePath);
+      rs.on('error', (e: unknown) => reject(e instanceof Error ? e : new Error(String(e))));
+      rs.pipe(gunzip).pipe(extract);
+    });
+    return findings;
+  },
+};
+
 export function getScannerPlugins(): ScannerPlugin[] {
   const opt = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
   const enableZip = !(opt === 'false' || opt === '0' || opt === 'no');
   const arr: ScannerPlugin[] = [];
-  if (enableZip) arr.push(zipScanner);
+  if (enableZip) arr.push(zipScanner, tarGzScanner);
   arr.push(envScanner, dockerScanner, textScanner);
   return arr;
 }
