@@ -4,6 +4,7 @@ import { Finding } from "./types.js";
 import { loadIgnorePatterns } from "./ignore.js";
 import { loadCache, saveCache, CacheData } from './cache.js';
 import { getScannerPlugins } from './plugins/scanners.js';
+import crypto from 'crypto';
 
 type ScanOptions = {
   concurrency?: number;
@@ -25,6 +26,7 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   // Load cache if configured
   const cachePath = options?.cachePath || process.env.SENTINEL_CACHE || '';
   let cache: CacheData | undefined;
+  const cacheMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase();
   if (cachePath) {
     cache = await loadCache(cachePath);
   }
@@ -36,35 +38,44 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
     while (true) {
       const i = idx++;
       if (i >= files.length) break;
+      const file = files[i];
       try {
-        const file = files[i];
+        const key = path.relative(baseDir!, file);
+        scannedKeys.add(key);
         if (cache) {
-          try {
-            const st = await fs.stat(file);
-            const key = path.relative(baseDir!, file);
-            scannedKeys.add(key);
-            const ce = cache.entries[key];
-            if (ce && ce.mtimeMs === st.mtimeMs && ce.size === st.size) {
+          const st = await fs.stat(file);
+          const ce = cache.entries[key];
+          let servedFromCache = false;
+          if (ce && ce.mtimeMs === st.mtimeMs && ce.size === st.size) {
+            if (cacheMode === 'hash') {
+              try {
+                const buf = await fs.readFile(file);
+                const h = crypto.createHash('sha256').update(buf).digest('hex');
+                if (ce.hash && ce.hash === h) {
+                  out.push(...ce.findings);
+                  servedFromCache = true;
+                }
+              } catch {}
+            } else {
               out.push(...ce.findings);
-              continue;
+              servedFromCache = true;
             }
-            const r = await scanFile(file, baseDir);
-            out.push(...r);
-            cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r };
-            continue;
-          } catch {
-            // fall through to no-cache path
           }
+          if (servedFromCache) continue;
+          const r = await scanFile(file, baseDir);
+          out.push(...r);
+          let hash: string | undefined;
+          if (cacheMode === 'hash') {
+            try {
+              const buf = await fs.readFile(file);
+              hash = crypto.createHash('sha256').update(buf).digest('hex');
+            } catch {}
+          }
+          cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r, hash };
+          continue;
         }
+        // no cache
         const r = await scanFile(file, baseDir);
-        if (cache) {
-          try {
-            const st = await fs.stat(file);
-            const key = path.relative(baseDir!, file);
-            scannedKeys.add(key);
-            cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r };
-          } catch {}
-        }
         out.push(...r);
       } catch {
         // ignore
