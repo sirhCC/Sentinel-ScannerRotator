@@ -33,4 +33,21 @@ describe('ignore parsing', () => {
     expect(res.find((r) => r.filePath.includes('keep.txt'))).toBeTruthy();
     expect(res.find((r) => r.filePath.includes('skip.txt'))).toBeFalsy();
   });
+
+  it('respects .secretignore with absolute scan path', async () => {
+    const repo = 'tmp-ignore-abs';
+    try { fs.mkdirSync(repo); } catch (_) {}
+    fs.writeFileSync(path.join(repo, 'root.txt'), 'no secret');
+    fs.mkdirSync(path.join(repo, 'sub'));
+    fs.writeFileSync(path.join(repo, 'sub', 'secret.txt'), 'AKIAABCDEFGHIJKLMNOP');
+    fs.writeFileSync(path.join(repo, '.secretignore'), 'sub');
+
+    const abs = path.resolve(repo);
+    const res = await scanPath(abs);
+
+    // cleanup
+    try { fs.rmSync(repo, { recursive: true }); } catch (_) {}
+
+    expect(res.find((r) => r.filePath.includes(path.join('sub', 'secret.txt')))).toBeFalsy();
+  });
 });
