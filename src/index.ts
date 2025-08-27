@@ -50,6 +50,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--list-rulesets', 'list available curated rulesets and exit', false)
   .option('--rulesets <names>', 'comma- or space-separated curated rulesets to enable (also via SENTINEL_RULESETS env)')
   .option('--rulesets-dirs <dirs>', 'comma-separated directories to discover external *.ruleset.json files (SENTINEL_RULESETS_DIRS)')
+  .option('--rulesets-catalog <urlOrFile>', 'ruleset marketplace catalog (http(s):// or file path)')
+  .option('--rulesets-install <names>', 'install rulesets from catalog into cache dir (comma- or space-separated)')
+  .option('--rulesets-cache-dir <dir>', 'cache directory for installed rulesets (default ./.sentinel_rulesets)')
   .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
   .option('--issues', 'auto-create issues on fail-on-findings (file provider default)', false)
   .option('--issues-file <path>', 'issues file path for file provider (.sentinel_issues.ndjson default)')
@@ -92,12 +95,26 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (opts.rulesetsDirs) {
     process.env.SENTINEL_RULESETS_DIRS = String(opts.rulesetsDirs);
   }
+  // Marketplace install: fetch catalog entries and cache locally, then add cache dir to discovery
+  if (opts.rulesetsCatalog && opts.rulesetsInstall) {
+    const { installRulesets } = await import('./rules/marketplace.js');
+    const names = String(opts.rulesetsInstall).split(/[,;\s]+/).filter(Boolean);
+    const dir = String(opts.rulesetsCacheDir || path.join(process.cwd(), '.sentinel_rulesets'));
+    try {
+      await installRulesets({ catalog: String(opts.rulesetsCatalog), names, cacheDir: dir, pubkey: process.env.SENTINEL_RULESET_PUBKEY });
+      const prev = (process.env.SENTINEL_RULESETS_DIRS || '').trim();
+      process.env.SENTINEL_RULESETS_DIRS = prev ? `${prev};${dir}` : dir;
+    } catch (e: any) {
+      console.error(e?.message || String(e));
+      return 1;
+    }
+  }
 
   // Handle --list-rulesets
   if (opts.listRulesets) {
     try {
       const { listRulesets } = await import('./rules/library.js');
-      const names = await listRulesets((process.env.SENTINEL_RULESETS_DIRS || '').split(/[,;]+/).filter(Boolean));
+  const names = await listRulesets((process.env.SENTINEL_RULESETS_DIRS || '').split(/[,;]+/).filter(Boolean));
       if (opts.logJson) console.log(JSON.stringify({ rulesets: names }));
       else console.log(`Available rulesets: ${names.join(', ')}`);
       return 0;
