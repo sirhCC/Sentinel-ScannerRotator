@@ -7,6 +7,7 @@ type Provider = {
   name: string;
   put: (key: string, value: string) => Promise<string>; // returns canonical ref suffix (e.g., key or ARN)
   get?: (key: string) => Promise<string | undefined>;
+  delete?: (key: string) => Promise<void>;
 };
 
 function sanitize(s: string) {
@@ -47,6 +48,19 @@ function fileProvider(): Provider {
         return undefined;
       }
     }
+    ,
+    async delete(key: string) {
+      try {
+        const txt = await fs.readFile(outPath, 'utf8');
+        const current = JSON.parse(txt || '{}');
+        if (key in current) {
+          delete current[key];
+          await fs.writeFile(outPath, JSON.stringify(current, null, 2), 'utf8');
+        }
+      } catch {
+        // ignore
+      }
+    }
   };
 }
 
@@ -72,7 +86,7 @@ async function awsProvider(): Promise<Provider> {
         }
   return name; // return secret name as ref suffix
       }
-    };
+  };
   } catch {
     throw new Error("AWS Secrets Manager SDK not available. Install '@aws-sdk/client-secrets-manager' or set SENTINEL_BACKEND=file.");
   }
@@ -137,6 +151,15 @@ async function vaultProvider(): Promise<Provider> {
     async get(key: string) {
       const fullKey = `${basePath}/${key}`;
       return doGet(fullKey);
+    },
+    async delete(key: string) {
+      // Best-effort soft delete: write empty value or ignore
+      try {
+        const fullKey = `${basePath}/${key}`;
+        await doPut(fullKey, '');
+      } catch {
+        // ignore
+      }
     }
   };
 }
@@ -170,14 +193,17 @@ export const backendRotator: Rotator = {
         : ref;
       return { success: true, message: `Would store secret and replace with ${placeholder} in ${finding.filePath}:${finding.line}` };
     }
-    try {
-      const provider = await getProvider();
-      const refSuffix = await provider.put(key, finding.match);
+  let provider: Provider | undefined;
+  try {
+    provider = await getProvider();
+    const refSuffix = await provider.put(key, finding.match);
       const ref = buildRef(provider.name, refSuffix);
       if (options?.verify && provider.get) {
         const readBack = await provider.get(key);
         if (readBack !== finding.match) {
-          return { success: false, message: `Verification failed for ${provider.name}:${key}` };
+      // cleanup
+      try { await provider.delete?.(key); } catch {}
+      return { success: false, message: `Verification failed for ${provider.name}:${key}` };
         }
       }
       const placeholder = options?.template
@@ -191,8 +217,10 @@ export const backendRotator: Rotator = {
         finding.filePath,
         (content) => content.replace(finding.match, placeholder)
       );
-      if (res.success) return { success: true, message: `Stored secret in ${provider.name} and replaced in ${finding.filePath} (backup: ${res.backupPath})` };
-      return { success: false, message: `Failed to update file after storing secret: ${res.error}` };
+    if (res.success) return { success: true, message: `Stored secret in ${provider.name} and replaced in ${finding.filePath} (backup: ${res.backupPath})` };
+    // rollback provider on failure
+    try { await provider.delete?.(key); } catch {}
+    return { success: false, message: `Failed to update file after storing secret: ${res.error}` };
     } catch (e: any) {
       return { success: false, message: `Failed to store secret: ${e?.message || e}` };
     }
