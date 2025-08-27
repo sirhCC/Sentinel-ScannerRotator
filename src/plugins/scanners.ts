@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import JSZip from 'jszip';
 import tar from 'tar-stream';
 import zlib from 'zlib';
@@ -13,6 +14,28 @@ export type ScannerPlugin = {
   supports(filePath: string): boolean;
   scan(filePath: string, baseDir?: string): Promise<Finding[]>;
 };
+
+type MlToken = { token: string; index: number; ruleName?: string; severity?: 'low'|'medium'|'high' };
+type MlHook = (line: string, ctx: { filePath: string; lineNumber: number }) => Promise<MlToken[] | undefined> | MlToken[] | undefined;
+let mlHook: MlHook | undefined;
+let mlTried = false;
+async function getMlHook(): Promise<MlHook | undefined> {
+  if (mlTried) return mlHook;
+  mlTried = true;
+  const spec = (process.env.SENTINEL_ML_HOOK || '').trim();
+  if (!spec) return undefined;
+  try {
+    const toImport = path.isAbsolute(spec) ? pathToFileURL(spec).href : spec;
+    const mod: any = await import(toImport);
+    const fn: any = mod?.analyzeLine || mod?.default;
+    if (typeof fn === 'function') {
+      mlHook = fn as MlHook;
+    }
+  } catch {
+    // ignore errors
+  }
+  return mlHook;
+}
 
 async function loadSecretRegexes(baseDir?: string) {
   const rules = await loadRules(baseDir);
@@ -29,6 +52,7 @@ export const textScanner: ScannerPlugin = {
     const findings: Finding[] = [];
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
@@ -45,6 +69,24 @@ export const textScanner: ScannerPlugin = {
             severity: s.severity,
           });
         }
+      }
+      if (hook) {
+        try {
+          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          if (tokens && Array.isArray(tokens)) {
+            for (const t of tokens) {
+              findings.push({
+                filePath,
+                line: i + 1,
+                column: t.index + 1,
+                match: t.token,
+                context: line.trim().slice(0, 200),
+                ruleName: t.ruleName || 'ML-Hook',
+                severity: t.severity || 'medium',
+              });
+            }
+          }
+        } catch {}
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -83,6 +125,7 @@ export const envScanner: ScannerPlugin = {
     // built-in regexes
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
@@ -97,6 +140,16 @@ export const envScanner: ScannerPlugin = {
       const mm = kv.exec(line);
       if (mm && sensitiveKeyRegex().test(mm[1]) && (mm[2].length >= 12)) {
         findings.push({ filePath, line: i + 1, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
+      }
+      if (hook) {
+        try {
+          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          if (tokens && Array.isArray(tokens)) {
+            for (const t of tokens) {
+              findings.push({ filePath, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+            }
+          }
+        } catch {}
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -123,6 +176,7 @@ export const dockerScanner: ScannerPlugin = {
     const findings: Finding[] = [];
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+  const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const s of SECRET_REGEXES) {
@@ -137,6 +191,16 @@ export const dockerScanner: ScannerPlugin = {
       if (mm && sensitiveKeyRegex().test(mm[2]) && (mm[3].length >= 12)) {
         const value = mm[3];
         findings.push({ filePath, line: i + 1, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
+      }
+      if (hook) {
+        try {
+          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          if (tokens && Array.isArray(tokens)) {
+            for (const t of tokens) {
+              findings.push({ filePath, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+            }
+          }
+        } catch {}
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -168,7 +232,8 @@ export const zipScanner: ScannerPlugin = {
     let totalBytes = 0;
     type ZipEntry = { dir?: boolean; name: string; async: (t: 'string') => Promise<string> };
     const entries = Object.values(zip.files) as unknown as ZipEntry[];
-    for (const entry of entries) {
+  const hook = await getMlHook();
+  for (const entry of entries) {
       if (count++ >= maxEntries) break;
       if (entry.dir) continue;
       // Only attempt to parse as text (utf8) for now
@@ -183,7 +248,7 @@ export const zipScanner: ScannerPlugin = {
       if (totalBytes + bytes > maxBytes) break;
       totalBytes += bytes;
       const lines = content.split(/\r?\n/);
-      for (let i = 0; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
     for (const s of SECRET_REGEXES) {
           let m: RegExpExecArray | null;
@@ -199,6 +264,16 @@ export const zipScanner: ScannerPlugin = {
       severity: s.severity,
             });
           }
+        }
+        if (hook) {
+          try {
+            const tokens = await hook(line, { filePath: `${filePath}:${entry.name}`, lineNumber: i + 1 });
+            if (tokens && Array.isArray(tokens)) {
+              for (const t of tokens) {
+                findings.push({ filePath: `${filePath}:${entry.name}`, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+              }
+            }
+          } catch {}
         }
       }
     }
@@ -224,7 +299,7 @@ export const tarGzScanner: ScannerPlugin = {
     let totalBytes = 0;
     await new Promise<void>((resolve, reject) => {
       const extract = tar.extract();
-      extract.on('entry', (header: { name: string; type: string; size?: number }, stream: NodeJS.ReadableStream, next: () => void) => {
+  extract.on('entry', (header: { name: string; type: string; size?: number }, stream: NodeJS.ReadableStream, next: () => void) => {
         if (count++ >= maxEntries) {
           stream.resume();
           return next();
@@ -267,6 +342,20 @@ export const tarGzScanner: ScannerPlugin = {
                 });
               }
             }
+            // ML hook for archives
+            // Note: getMlHook() returns cached hook once loaded
+            void getMlHook().then((hook) => {
+              if (!hook) return;
+              Promise.resolve(hook(line, { filePath: `${filePath}:${header.name}`, lineNumber: i + 1 }))
+                .then((tokens) => {
+                  if (tokens && Array.isArray(tokens)) {
+                    for (const t of tokens) {
+                      findings.push({ filePath: `${filePath}:${header.name}`, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+                    }
+                  }
+                })
+                .catch(() => {});
+            });
           }
           next();
         });
