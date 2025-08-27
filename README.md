@@ -70,6 +70,10 @@ Key options:
 - `--metrics <path>`: write Prometheus metrics at end of run
 - `--issues` and `--issues-file <path>`: create issues (file provider) when failing on findings
   
+Subcommands:
+
+- `undo <file>`: restore the specified file from the most recent backup in `.sentinel_tmp` (or `SENTINEL_TMP_DIR`). Useful to roll back a previous apply.
+  
 Environment options:
 
 - `SENTINEL_ENTROPY`: enable high-entropy token detection (`true`/`1`/`yes`).
@@ -91,6 +95,13 @@ Apply with a template (dangerous; creates backups and supports rollback):
 
 ```powershell
 npm start -- . --rotator apply --force --template "__MASKED_{{timestamp}}__"
+```
+
+Undo the last change on a single file:
+
+
+```powershell
+npm start -- undo .\path\to\file.txt
 ```
 
 Interactive approval with audit log:
