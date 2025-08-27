@@ -35,6 +35,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--rulesets <names>', 'comma- or space-separated curated rulesets to enable (also via SENTINEL_RULESETS env)')
   .option('--rulesets-dirs <dirs>', 'comma-separated directories to discover external *.ruleset.json files (SENTINEL_RULESETS_DIRS)')
   .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
+  .option('--issues', 'auto-create issues on fail-on-findings (file provider default)', false)
+  .option('--issues-file <path>', 'issues file path for file provider (.sentinel_issues.ndjson default)')
+  .option('--metrics <path>', 'write Prometheus-format metrics to file at end of run')
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
   .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
@@ -60,6 +63,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
     throw err;
   }
   const opts = parsed.opts();
+  // metrics init
+  const { newMetrics, writeProm } = await import('./metrics.js');
+  const m = newMetrics();
   // Apply ruleset-related options to env to keep lower layers simple
   if (typeof opts.disableBuiltinRules === 'boolean' && opts.disableBuiltinRules) {
     process.env.SENTINEL_DISABLE_BUILTIN_RULES = 'true';
@@ -133,6 +139,11 @@ export async function runCli(argsIn: string[]): Promise<number> {
   const cachePath = opts.cache || process.env.SENTINEL_CACHE;
   const findings = await scanPath(target, extraIg, baseDir, { concurrency: scanConc, cachePath });
   logger.info(`Found ${findings.length} findings.`);
+  m.findings_total = findings.length;
+  for (const f of findings) {
+    const s = String(f.severity || 'medium').toLowerCase() as 'low'|'medium'|'high';
+    m.findings_by_severity[s] = (m.findings_by_severity[s] || 0) + 1 as any;
+  }
   // Optional export of findings to JSON/CSV
   async function exportFindingsIfRequested() {
     if (!opts.out) return;
@@ -197,10 +208,30 @@ export async function runCli(argsIn: string[]): Promise<number> {
     const thrMed = Number.isFinite(opts.failThresholdMedium) ? opts.failThresholdMedium : policy?.thresholds?.medium;
     const thrLow = Number.isFinite(opts.failThresholdLow) ? opts.failThresholdLow : policy?.thresholds?.low;
     const tripped = checkSev('high', thrHigh) || checkSev('medium', thrMed) || checkSev('low', thrLow);
-    if (tripped) return 4;
+    if (tripped) {
+      if (opts.issues) {
+        try {
+          const { createIssues } = await import('./issues.js');
+          await createIssues(findings as any, { filePath: opts.issuesFile });
+        } catch {}
+      }
+      if (opts.metrics) {
+        try { await writeProm(m, opts.metrics); } catch {}
+      }
+      return 4;
+    }
     const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : (policy?.thresholds?.total ?? 0);
     if (findings.length > threshold) {
       logger.error(`Failing due to findings (${findings.length}) exceeding threshold (${threshold}).`);
+      if (opts.issues) {
+        try {
+          const { createIssues } = await import('./issues.js');
+          await createIssues(findings as any, { filePath: opts.issuesFile });
+        } catch {}
+      }
+      if (opts.metrics) {
+        try { await writeProm(m, opts.metrics); } catch {}
+      }
       return 4;
     }
   }
@@ -240,6 +271,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
           template: opts.template,
           verify: opts.verify,
         });
+  m.rotations_total++;
+  if (res.success) m.rotations_success++; else m.rotations_failed++;
         if (res.success) logger.info(res.message as string);
         else logger.warn(res.message as string);
         if (auditor) {
@@ -262,6 +295,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   const workers = Array.from({ length: Math.min(rotateConc, files.length || 1) }, () => rotateWorker());
   await Promise.all(workers);
   if (auditor) await auditor.close();
+  if (opts.metrics) {
+    try { await writeProm(m, opts.metrics); } catch {}
+  }
   return 0;
 }
 
