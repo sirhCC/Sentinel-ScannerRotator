@@ -78,6 +78,9 @@ Legend:
 
 1. Add ruleset library and rule marketplace (curated regexes, entropy checks, ML model hook) — long-term.
 	- 🟨 [IN PROGRESS 2025-08-26] Introduced curated built-in rules with severities and custom rules via config; scanners now emit `ruleName` and `severity`. Opt-in entropy detector added (SENTINEL_ENTROPY).
+	- 🟨 [IN PROGRESS 2025-08-26] Added curated ruleset library with `--list-rulesets`, `--rulesets`, and `--rulesets-dirs`; supports disabling built-ins via `--disable-builtin-rules`.
+	- 🟨 [IN PROGRESS 2025-08-26] Added optional ML hook via `SENTINEL_ML_HOOK` to enrich detections.
+	- ⬜ Remaining: hosted marketplace UI, remote catalog sync, and trust/signature model for third-party rulesets; ML model packaging.
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 	- 🟨 [IN PROGRESS 2025-08-26] Policy loader reads thresholds and forbidden rules from project config; CLI enforces per-severity/total thresholds and forbidden rules with `--fail-on-findings`. (Issue creation/integrations deferred.)
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
@@ -87,7 +90,8 @@ Legend:
 		- TAR.GZ archives (text entries only; guarded by limits)
 		- `.env` files (key=value heuristics)
 		- Dockerfiles (ENV/ARG heuristics)
-	- Remaining: selective binary scanning and additional formats (e.g., .7z); evaluation needed.
+	- 🟨 [IN PROGRESS 2025-08-26] Added opt-in binary scanner (`SENTINEL_SCAN_BINARIES=true`) for small files (<= 2 MiB), naive UTF-8 decode.
+	- Remaining: selective binary scanning improvements, additional formats (e.g., .7z), and content-type sniffing.
 
 5. Add Jupyter Notebook extension (nbextension) to scan notebook cells client-side and surface findings in the UI.
 	- 🟨 [IN PROGRESS 2025-08-26] Minimal classic Notebook extension scaffolded under `examples/nbext/` with toolbar scan button and findings dialog.
