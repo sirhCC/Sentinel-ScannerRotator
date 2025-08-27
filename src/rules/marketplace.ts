@@ -59,6 +59,7 @@ export async function installRulesets(opts: {
   names: string[];
   cacheDir: string;
   pubkey?: string; // override catalog.pubkey
+  requireSigned?: boolean;
 }): Promise<{ installed: string[]; dir: string }>{
   const { catalog, names, cacheDir, pubkey } = opts;
   const cat = await loadCatalog(catalog);
@@ -72,6 +73,9 @@ export async function installRulesets(opts: {
     if (!ent) throw new Error(`Ruleset not found in catalog: ${n}`);
     const data = await fetchMaybe(ent.url);
     if (!verifySha256(data, ent.sha256)) throw new Error(`SHA256 mismatch for ${n}`);
+    if (opts.requireSigned) {
+      if (!ent.sig || !pk) throw new Error(`Signature required but missing for ${n}`);
+    }
     if (!verifySigEd25519(data, ent.sig, pk)) throw new Error(`Signature verify failed for ${n}`);
     const outPath = path.join(cacheDir, `${n}.ruleset.json`);
     await fs.writeFile(outPath, data);

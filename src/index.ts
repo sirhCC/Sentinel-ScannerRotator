@@ -56,6 +56,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
   .option('--issues', 'auto-create issues on fail-on-findings (file provider default)', false)
   .option('--issues-file <path>', 'issues file path for file provider (.sentinel_issues.ndjson default)')
+  .option('--issues-provider <name>', 'issues provider: file | github (default file)')
+  .option('--issues-repo <owner/name>', 'for github provider: repository, e.g., org/repo')
   .option('--metrics <path>', 'write Prometheus-format metrics to file at end of run')
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
@@ -245,7 +247,12 @@ export async function runCli(argsIn: string[]): Promise<number> {
       if (opts.issues) {
         try {
           const { createIssues } = await import('./issues.js');
-          await createIssues(findings as any, { filePath: opts.issuesFile });
+          const provider = (opts.issuesProvider || process.env.SENTINEL_ISSUES_PROVIDER) as string | undefined;
+          if ((provider || '').toLowerCase() === 'github') {
+            await createIssues(findings as any, { provider: 'github', repo: opts.issuesRepo });
+          } else {
+            await createIssues(findings as any, { filePath: opts.issuesFile });
+          }
         } catch {}
       }
       if (opts.metrics) {
@@ -259,7 +266,12 @@ export async function runCli(argsIn: string[]): Promise<number> {
       if (opts.issues) {
         try {
           const { createIssues } = await import('./issues.js');
-          await createIssues(findings as any, { filePath: opts.issuesFile });
+          const provider = (opts.issuesProvider || process.env.SENTINEL_ISSUES_PROVIDER) as string | undefined;
+          if ((provider || '').toLowerCase() === 'github') {
+            await createIssues(findings as any, { provider: 'github', repo: opts.issuesRepo });
+          } else {
+            await createIssues(findings as any, { filePath: opts.issuesFile });
+          }
         } catch {}
       }
       if (opts.metrics) {
