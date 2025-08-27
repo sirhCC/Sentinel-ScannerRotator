@@ -31,6 +31,10 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--cache <path>', 'persist scan cache to a file to speed up repeated runs (or use SENTINEL_CACHE env)')
   .option('--scan-concurrency <n>', 'number of concurrent file scans (default 8 or SENTINEL_SCAN_CONCURRENCY)', (v) => parseInt(v, 10))
   .option('--rotate-concurrency <n>', 'number of concurrent rotations (default 4 or SENTINEL_ROTATE_CONCURRENCY)', (v) => parseInt(v, 10))
+  .option('--list-rulesets', 'list available curated rulesets and exit', false)
+  .option('--rulesets <names>', 'comma- or space-separated curated rulesets to enable (also via SENTINEL_RULESETS env)')
+  .option('--rulesets-dirs <dirs>', 'comma-separated directories to discover external *.ruleset.json files (SENTINEL_RULESETS_DIRS)')
+  .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
   .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
@@ -56,6 +60,30 @@ export async function runCli(argsIn: string[]): Promise<number> {
     throw err;
   }
   const opts = parsed.opts();
+  // Apply ruleset-related options to env to keep lower layers simple
+  if (typeof opts.disableBuiltinRules === 'boolean' && opts.disableBuiltinRules) {
+    process.env.SENTINEL_DISABLE_BUILTIN_RULES = 'true';
+  }
+  if (opts.rulesets) {
+    process.env.SENTINEL_RULESETS = String(opts.rulesets);
+  }
+  if (opts.rulesetsDirs) {
+    process.env.SENTINEL_RULESETS_DIRS = String(opts.rulesetsDirs);
+  }
+
+  // Handle --list-rulesets
+  if (opts.listRulesets) {
+    try {
+      const { listRulesets } = await import('./rules/library.js');
+      const names = await listRulesets((process.env.SENTINEL_RULESETS_DIRS || '').split(/[,;]+/).filter(Boolean));
+      if (opts.logJson) console.log(JSON.stringify({ rulesets: names }));
+      else console.log(`Available rulesets: ${names.join(', ')}`);
+      return 0;
+    } catch (e: any) {
+      console.error(e?.message || String(e));
+      return 1;
+    }
+  }
   const target = parsed.args[0] || '.';
 
   const logger = createLogger({ json: !!opts.logJson, level: opts.logLevel || 'info' });
