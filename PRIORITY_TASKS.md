@@ -84,6 +84,7 @@ Legend:
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 	- 🟨 [IN PROGRESS 2025-08-26] Policy loader reads thresholds and forbidden rules from project config; CLI enforces per-severity/total thresholds and forbidden rules with `--fail-on-findings`. (Issue creation/integrations deferred.)
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
+	- 🟨 [IN PROGRESS 2025-08-26] Added `sentinel undo <file>` subcommand to restore the most recent on-disk backup created by safe updates. Backend roll-forward/back remains to be designed.
 4. Add scanning plugins for binary files and common artifact formats (Dockerfiles, environment files, zipped artifacts).
 	- 🟨 [IN PROGRESS 2025-08-26] Scanner plugin system added; specialized scanners implemented:
 		- ZIP archives (text entries only; guarded by size/entry limits)
