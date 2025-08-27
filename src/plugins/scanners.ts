@@ -213,6 +213,46 @@ export const dockerScanner: ScannerPlugin = {
   },
 };
 
+export const binaryScanner: ScannerPlugin = {
+  name: 'binary',
+  supports(filePath: string) {
+    const l = filePath.toLowerCase();
+    // Skip known text-like extensions, target unknown/binary-ish files under size threshold
+    const textExts = ['.txt', '.md', '.json', '.yaml', '.yml', '.ts', '.js', '.tsx', '.jsx', '.env', '.dockerfile'];
+    const ext = path.extname(l);
+    if (!ext) return true;
+    return !textExts.includes(ext);
+  },
+  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+    const allow = (process.env.SENTINEL_SCAN_BINARIES ?? 'false').toLowerCase();
+    if (!(allow === 'true' || allow === '1' || allow === 'yes')) return [];
+    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    try {
+      const buf = await fs.readFile(filePath);
+      // Guardrails
+      const maxBytes = Number(process.env.SENTINEL_BIN_MAX_BYTES || '2097152'); // 2 MiB
+      if (buf.length > maxBytes) return [];
+      // Naive decode: try utf8; for failures, replace invalids
+      const text = buf.toString('utf8');
+      const findings: Finding[] = [];
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        for (const s of SECRET_REGEXES) {
+          let m: RegExpExecArray | null;
+          const re = new RegExp(s.re.source, s.re.flags);
+          while ((m = re.exec(line)) !== null) {
+            findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
+          }
+        }
+      }
+      return findings;
+    } catch {
+      return [];
+    }
+  },
+};
+
 export const zipScanner: ScannerPlugin = {
   name: 'zip',
   supports(filePath: string) {
@@ -381,6 +421,8 @@ export function getScannerPlugins(): ScannerPlugin[] {
   const enableZip = !(opt === 'false' || opt === '0' || opt === 'no');
   const arr: ScannerPlugin[] = [];
   if (enableZip) arr.push(zipScanner, tarGzScanner);
+  const enableBin = ((process.env.SENTINEL_SCAN_BINARIES ?? 'false').toLowerCase());
+  if (enableBin === 'true' || enableBin === '1' || enableBin === 'yes') arr.push(binaryScanner);
   arr.push(envScanner, dockerScanner, textScanner);
   return arr;
 }
