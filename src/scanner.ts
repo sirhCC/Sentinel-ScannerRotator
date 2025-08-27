@@ -20,7 +20,8 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
 
   const ig = await loadIgnorePatterns(targetPath, extraIg);
   const files: string[] = [];
-  await walkDirCollect(targetPath, ig as { ignores: (p: string) => boolean }, files);
+  const scanRoot = path.resolve(targetPath);
+  await walkDirCollect(scanRoot, scanRoot, ig as { ignores: (p: string) => boolean }, files);
   const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
   const conc = Math.max(1, (options?.concurrency ?? (isNaN(envConc) ? undefined : envConc)) ?? 8);
   // Load cache if configured
@@ -94,14 +95,14 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   return out;
 }
 
-async function walkDirCollect(dir: string, ig: { ignores: (p: string) => boolean }, files: string[]) {
+async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: string) => boolean }, files: string[]) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
-    const rel = path.relative(process.cwd(), full);
+    const rel = path.relative(root, full) || e.name;
     if (ig.ignores(rel)) continue;
     if (e.isDirectory()) {
-      await walkDirCollect(full, ig, files);
+      await walkDirCollect(full, root, ig, files);
     } else if (e.isFile()) {
       files.push(full);
     }
