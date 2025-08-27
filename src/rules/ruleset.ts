@@ -1,4 +1,5 @@
 import { loadPatterns } from '../config.js';
+import { loadSelectedRules } from './library.js';
 
 export type Severity = 'low' | 'medium' | 'high';
 
@@ -23,20 +24,26 @@ const BUILTIN_RULES: Rule[] = [
 ];
 
 export async function loadRules(baseDir?: string): Promise<Rule[]> {
+  const disableBuiltins = ((process.env.SENTINEL_DISABLE_BUILTIN_RULES || 'false').toLowerCase())
+    .match(/^(1|true|yes)$/) !== null;
+  const selectedCurated = await loadSelectedRules(baseDir);
   // Back-compat: loadPatterns returns {name, regex} from config/defaults or project config
   const defs = await loadPatterns(baseDir);
-  if (!defs || defs.length === 0) return BUILTIN_RULES;
-  const custom: Rule[] = [];
-  for (const d of defs as unknown as RuleDef[]) {
-    if (d.enabled === false) continue;
-    try {
-      const re = new RegExp(d.regex, 'g');
-  const sev = (d.severity || 'medium');
-  const severity: Severity = (sev === 'low' || sev === 'high' || sev === 'medium') ? sev : 'medium';
-      custom.push({ name: d.name, re, severity });
-    } catch {
-      // skip invalid regex
+  const out: Rule[] = [];
+  if (!disableBuiltins) out.push(...BUILTIN_RULES);
+  if (selectedCurated && selectedCurated.length) out.push(...selectedCurated);
+  if (defs && defs.length) {
+    for (const d of defs as unknown as RuleDef[]) {
+      if (d.enabled === false) continue;
+      try {
+        const re = new RegExp(d.regex, 'g');
+        const sev = (d.severity || 'medium');
+        const severity: Severity = (sev === 'low' || sev === 'high' || sev === 'medium') ? sev : 'medium';
+        out.push({ name: d.name, re, severity });
+      } catch {
+        // skip invalid regex
+      }
     }
   }
-  return [...BUILTIN_RULES, ...custom];
+  return out.length ? out : BUILTIN_RULES;
 }
