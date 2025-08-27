@@ -65,6 +65,10 @@ Key options:
 - `--cache <path>`: persist scan cache to a file (or use SENTINEL_CACHE)
 - `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
 - `--fail-threshold-high|--fail-threshold-medium|--fail-threshold-low <n>`: with `--fail-on-findings`, fail if per-severity counts exceed N
+- `--list-rulesets` | `--rulesets <names>` | `--rulesets-dirs <dirs>`: curated rulesets features
+- `--disable-builtin-rules`: disable built-in rule set
+- `--metrics <path>`: write Prometheus metrics at end of run
+- `--issues` and `--issues-file <path>`: create issues (file provider) when failing on findings
   
 Environment options:
 
@@ -318,6 +322,22 @@ $env:SENTINEL_CACHE_MODE = 'hash'; npm start -- . --rotator dry-run --cache .\.s
 - Custom rules can be added via `.secretsentinel.json`/`.secretsentinel.yaml` using the existing `patterns` array; optional fields `severity` (low|medium|high) and `enabled: false` are supported.
 - Findings include `rule` and `severity` when available. Exports (JSON/CSV) include these fields.
 - Opt-in entropy detector: set `SENTINEL_ENTROPY=true` to flag high-entropy tokens (base64/hex-like) above a threshold. Future flags may allow tuning the threshold.
+
+### Curated rulesets and marketplace
+
+- List curated rulesets: `npm start -- --list-rulesets`.
+- Enable curated rulesets: `--rulesets "common,cloud"` or `SENTINEL_RULESETS`.
+- Discover external rulesets from directories with `--rulesets-dirs ".\\curated;C:\\more"` (files named `*.ruleset.json`).
+- Disable built-ins with `--disable-builtin-rules` or `SENTINEL_DISABLE_BUILTIN_RULES=true`.
+
+### ML model hook (optional)
+
+- Provide `SENTINEL_ML_HOOK` path or spec to a module exporting `analyzeLine(line, {filePath, lineNumber})` returning tokens.
+- Findings from ML are tagged as `ML-Hook` unless `ruleName` is set.
+
+### Binary scanning (optional)
+
+- Enable with `SENTINEL_SCAN_BINARIES=true`; scans small binary files (<= 2 MiB) by decoding to UTF-8 and applying rules.
 
 ### Policy (optional)
 
