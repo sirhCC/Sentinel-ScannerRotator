@@ -6,8 +6,24 @@ import { Command } from 'commander';
 import fs from 'fs/promises';
 import path from 'path';
 import readline from 'readline';
+import { restoreLastBackup } from './undo.js';
 
 export async function runCli(argsIn: string[]): Promise<number> {
+  // Early subcommand: undo
+  if (argsIn[0] === 'undo') {
+    const target = argsIn[1];
+    if (!target) {
+      console.error('Usage: sentinel undo <file>');
+      return 1;
+    }
+    const res = await restoreLastBackup(path.resolve(target));
+    if (res.success) {
+      console.log(res.message);
+      return 0;
+    }
+    console.error(res.message);
+    return 1;
+  }
   const program = new Command();
   program
     .name('sentinel')
