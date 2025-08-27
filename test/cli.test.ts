@@ -54,6 +54,11 @@ describe('cli', () => {
     expect(code).toBe(0);
   });
 
+  it('lists available rulesets and exits 0', async () => {
+  const code = await runCli(['--list-rulesets']);
+  expect(code).toBe(0);
+  });
+
   it('fails fast with --fail-on-findings', async () => {
     const fs = require('fs');
     const path = require('path');
