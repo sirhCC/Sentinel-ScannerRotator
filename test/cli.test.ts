@@ -88,4 +88,26 @@ describe('cli', () => {
     expect(code).toBe(0);
     expect(content).toMatch(/__CLI_\d+__/);
   });
+
+  it('undo restores last backup for a file', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+    process.env.SENTINEL_TMP_DIR = uniqueTmp;
+    const repo = 'tmp-cli-undo';
+    const f = path.join(repo, 's.txt');
+    try { fs.mkdirSync(repo); } catch {}
+    fs.writeFileSync(f, 'before AKIAABCDEFGHIJKLMNOP after');
+    // rotate to produce a backup
+    let code = await runCli([repo, '--rotator', 'apply', '--force', '--template', '__UNDO__']);
+    expect(code).toBe(0);
+    // Now undo on that file
+    code = await runCli(['undo', f]);
+    const content = fs.readFileSync(f, 'utf8');
+    try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
+    delete process.env.SENTINEL_TMP_DIR;
+    expect(code).toBe(0);
+    expect(content).toContain('AKIAABCDEFGHIJKLMNOP');
+  });
 });
