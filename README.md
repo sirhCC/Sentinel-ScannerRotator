@@ -341,6 +341,21 @@ $env:SENTINEL_CACHE_MODE = 'hash'; npm start -- . --rotator dry-run --cache .\.s
 - Discover external rulesets from directories with `--rulesets-dirs ".\\curated;C:\\more"` (files named `*.ruleset.json`).
 - Disable built-ins with `--disable-builtin-rules` or `SENTINEL_DISABLE_BUILTIN_RULES=true`.
 
+Install from a catalog and enforce signatures:
+
+```powershell
+# Install from a catalog into cache dir
+sentinel --rulesets-catalog .\catalog.json --rulesets-install common,cloud --rulesets-cache-dir .\.sentinel_rulesets
+
+# Require signed rulesets using a PEM public key (file or inline content)
+sentinel --rulesets-catalog .\catalog.json --rulesets-install common \
+  --rulesets-require-signed --rulesets-pubkey .\rules_pubkey.pem
+
+# Require the catalog itself to be signed via a detached .sig file
+sentinel --rulesets-catalog .\catalog.json --rulesets-install common \
+  --rulesets-catalog-require-signed --rulesets-catalog-pubkey .\catalog_pubkey.pem
+```
+
 ### ML model hook (optional)
 
 - Provide `SENTINEL_ML_HOOK` path or spec to a module exporting `analyzeLine(line, {filePath, lineNumber})` returning tokens.
