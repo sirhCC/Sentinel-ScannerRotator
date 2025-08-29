@@ -80,7 +80,8 @@ Legend:
 	- 🟨 [IN PROGRESS 2025-08-26] Introduced curated built-in rules with severities and custom rules via config; scanners now emit `ruleName` and `severity`. Opt-in entropy detector added (SENTINEL_ENTROPY).
 	- 🟨 [IN PROGRESS 2025-08-26] Added curated ruleset library with `--list-rulesets`, `--rulesets`, and `--rulesets-dirs`; supports disabling built-ins via `--disable-builtin-rules`.
 	- 🟨 [IN PROGRESS 2025-08-26] Added optional ML hook via `SENTINEL_ML_HOOK` to enrich detections.
-	- ⬜ Remaining: hosted marketplace UI, remote catalog sync, and trust/signature model for third-party rulesets; ML model packaging.
+	- 🟨 [IN PROGRESS 2025-08-28] Implemented basic marketplace install flow: `--rulesets-catalog`, `--rulesets-install`, and `--rulesets-cache-dir` with SHA-256 and optional ed25519 signature verification; installed rulesets are auto-discovered.
+	- ⬜ Remaining: hosted marketplace UI/UX, remote catalog trust distribution, signature key management, and ML model packaging.
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 	- 🟨 [IN PROGRESS 2025-08-26] Policy loader reads thresholds and forbidden rules from project config; CLI enforces per-severity/total thresholds and forbidden rules with `--fail-on-findings`. (Issue creation/integrations deferred.)
 3. Add roll-forward and roll-back strategies for rotators integrated with external secret stores (i.e., ability to re-create secrets or rotate back to previous values).
@@ -90,13 +91,14 @@ Legend:
 		- ZIP archives (text entries only; guarded by size/entry limits)
 		- TAR.GZ archives (text entries only; guarded by limits)
 		- `.env` files (key=value heuristics)
-		- Dockerfiles (ENV/ARG heuristics)
+	- Dockerfiles (ENV/ARG heuristics)
 	- 🟨 [IN PROGRESS 2025-08-26] Added opt-in binary scanner (`SENTINEL_SCAN_BINARIES=true`) for small files (<= 2 MiB), naive UTF-8 decode.
 	- Remaining: selective binary scanning improvements, additional formats (e.g., .7z), and content-type sniffing.
 
 5. Add Jupyter Notebook extension (nbextension) to scan notebook cells client-side and surface findings in the UI.
 	- 🟨 [IN PROGRESS 2025-08-26] Minimal classic Notebook extension scaffolded under `examples/nbext/` with toolbar scan button and findings dialog.
 6. Add analytics/dashboarding exporter (Prometheus metrics + optional Grafana dashboards).
+	- 🟨 [IN PROGRESS 2025-08-28] Added Prometheus metrics HTTP server (`--metrics-server` and `--metrics-port`) exposing `/metrics` and `/healthz`. File exporter remains available via `--metrics`.
 
 ## Nice-to-have / Wish list
 
