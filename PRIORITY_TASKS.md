@@ -81,6 +81,7 @@ Legend:
 	- 🟨 [IN PROGRESS 2025-08-26] Added curated ruleset library with `--list-rulesets`, `--rulesets`, and `--rulesets-dirs`; supports disabling built-ins via `--disable-builtin-rules`.
 	- 🟨 [IN PROGRESS 2025-08-26] Added optional ML hook via `SENTINEL_ML_HOOK` to enrich detections.
 	- 🟨 [IN PROGRESS 2025-08-28] Implemented basic marketplace install flow: `--rulesets-catalog`, `--rulesets-install`, and `--rulesets-cache-dir` with SHA-256 and optional ed25519 signature verification; installed rulesets are auto-discovered.
+	- 🟨 [IN PROGRESS 2025-08-28] Added signature enforcement flags: `--rulesets-require-signed` and `--rulesets-pubkey` (or `SENTINEL_RULESET_PUBKEY`) supporting PEM content or file path.
 	- ⬜ Remaining: hosted marketplace UI/UX, remote catalog trust distribution, signature key management, and ML model packaging.
 2. Add policy engine to define allowed/forbidden patterns and auto-create issues in trackers when high-severity findings are found.
 	- 🟨 [IN PROGRESS 2025-08-26] Policy loader reads thresholds and forbidden rules from project config; CLI enforces per-severity/total thresholds and forbidden rules with `--fail-on-findings`. (Issue creation/integrations deferred.)
