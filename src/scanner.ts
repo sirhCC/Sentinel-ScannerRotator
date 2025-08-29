@@ -21,7 +21,18 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   const ig = await loadIgnorePatterns(targetPath, extraIg);
   const files: string[] = [];
   const scanRoot = path.resolve(targetPath);
-  await walkDirCollect(scanRoot, scanRoot, ig as { ignores: (p: string) => boolean }, files);
+  const excludes = new Set<string>();
+  const backendFile = (process.env.SENTINEL_BACKEND_FILE || '').trim();
+  if (backendFile) {
+    const abs = path.resolve(backendFile);
+    excludes.add(abs);
+    if (abs.toLowerCase().endsWith('.json')) {
+      excludes.add(abs.replace(/\.json$/i, '.history.ndjson'));
+    } else {
+      excludes.add(abs + '.history.ndjson');
+    }
+  }
+  await walkDirCollect(scanRoot, scanRoot, ig as { ignores: (p: string) => boolean }, files, excludes);
   const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
   const conc = Math.max(1, (options?.concurrency ?? (isNaN(envConc) ? undefined : envConc)) ?? 8);
   // Load cache if configured
@@ -95,14 +106,15 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   return out;
 }
 
-async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: string) => boolean }, files: string[]) {
+async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: string) => boolean }, files: string[], excludes?: Set<string>) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
+    if (excludes && excludes.has(full)) continue;
     const rel = path.relative(root, full) || e.name;
     if (ig.ignores(rel)) continue;
     if (e.isDirectory()) {
-      await walkDirCollect(full, root, ig, files);
+      await walkDirCollect(full, root, ig, files, excludes);
     } else if (e.isFile()) {
       files.push(full);
     }

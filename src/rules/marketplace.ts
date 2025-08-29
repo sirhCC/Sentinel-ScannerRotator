@@ -37,6 +37,28 @@ export async function loadCatalog(spec: string): Promise<Catalog> {
   return json as Catalog;
 }
 
+async function fetchCatalogSig(spec: string): Promise<Buffer | undefined> {
+  // Try sidecar .sig next to the catalog resource
+  if (/^https?:\/\//i.test(spec)) {
+    const url = new URL(spec);
+    const candidate = new URL(url.toString() + '.sig');
+    try {
+      const res = await fetch(candidate.toString());
+      if (res.ok) {
+        const arr = new Uint8Array(await res.arrayBuffer());
+        return Buffer.from(arr);
+      }
+    } catch {}
+    return undefined;
+  }
+  const ap = path.resolve(spec + '.sig');
+  try {
+    return await fs.readFile(ap);
+  } catch {
+    return undefined;
+  }
+}
+
 function verifySha256(buf: Buffer, hex?: string) {
   if (!hex) return true;
   const got = crypto.createHash('sha256').update(buf).digest('hex');
@@ -58,11 +80,24 @@ export async function installRulesets(opts: {
   catalog: string;
   names: string[];
   cacheDir: string;
-  pubkey?: string; // override catalog.pubkey
-  requireSigned?: boolean;
+  pubkey?: string; // override catalog.pubkey for ruleset item signatures
+  requireSigned?: boolean; // require ruleset item signatures
+  catalogPubkey?: string; // pubkey for catalog detached signature
+  catalogRequireSigned?: boolean; // require catalog to be signed
 }): Promise<{ installed: string[]; dir: string }>{
   const { catalog, names, cacheDir, pubkey } = opts;
-  const cat = await loadCatalog(catalog);
+  // Load raw catalog bytes for optional detached signature verification
+  const catBuf = await fetchMaybe(catalog);
+  if (opts.catalogRequireSigned) {
+    const sigBuf = await fetchCatalogSig(catalog);
+    if (!sigBuf) throw new Error('Catalog signature required but missing (.sig not found)');
+    const pk = opts.catalogPubkey;
+    if (!pk) throw new Error('Catalog signature required but no public key provided');
+    const keyObj = crypto.createPublicKey(pk);
+    const ok = crypto.verify(null, catBuf, keyObj, sigBuf);
+    if (!ok) throw new Error('Catalog signature verification failed');
+  }
+  const cat = JSON.parse(catBuf.toString('utf8')) as Catalog;
   const pk = pubkey || cat.pubkey;
   try { await fs.mkdir(cacheDir, { recursive: true }); } catch {}
   const map: Record<string, CatalogEntry> = {};

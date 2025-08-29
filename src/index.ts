@@ -55,6 +55,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--rulesets-cache-dir <dir>', 'cache directory for installed rulesets (default ./.sentinel_rulesets)')
   .option('--rulesets-require-signed', 'require ed25519 signatures for installed rulesets', false)
   .option('--rulesets-pubkey <pemOrPath>', 'PEM public key for verifying signed rulesets (or set SENTINEL_RULESET_PUBKEY)')
+  .option('--rulesets-catalog-require-signed', 'require detached signature for catalog (catalog.json.sig)', false)
+  .option('--rulesets-catalog-pubkey <pemOrPath>', 'PEM public key to verify catalog signature')
   .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
   .option('--issues', 'auto-create issues on fail-on-findings (file provider default)', false)
   .option('--issues-file <path>', 'issues file path for file provider (.sentinel_issues.ndjson default)')
@@ -117,7 +119,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
     const names = String(opts.rulesetsInstall).split(/[,;\s]+/).filter(Boolean);
     const dir = String(opts.rulesetsCacheDir || path.join(process.cwd(), '.sentinel_rulesets'));
     try {
-  let pubkey = process.env.SENTINEL_RULESET_PUBKEY;
+      let pubkey = process.env.SENTINEL_RULESET_PUBKEY;
+      let catalogPubkey: string | undefined;
       if (opts.rulesetsPubkey) {
         const v = String(opts.rulesetsPubkey);
         try {
@@ -131,7 +134,24 @@ export async function runCli(argsIn: string[]): Promise<number> {
           pubkey = v; // fallback to raw content
         }
       }
-      await installRulesets({ catalog: String(opts.rulesetsCatalog), names, cacheDir: dir, pubkey, requireSigned: !!opts.rulesetsRequireSigned });
+      if (opts.rulesetsCatalogPubkey) {
+        const v = String(opts.rulesetsCatalogPubkey);
+        try {
+          if (v.includes('-----BEGIN') || v.includes('\n')) catalogPubkey = v;
+          else catalogPubkey = await fs.readFile(v, 'utf8');
+        } catch {
+          catalogPubkey = v;
+        }
+      }
+      await installRulesets({
+        catalog: String(opts.rulesetsCatalog),
+        names,
+        cacheDir: dir,
+        pubkey,
+        requireSigned: !!opts.rulesetsRequireSigned,
+        catalogPubkey,
+        catalogRequireSigned: !!opts.rulesetsCatalogRequireSigned,
+      });
       const prev = (process.env.SENTINEL_RULESETS_DIRS || '').trim();
       process.env.SENTINEL_RULESETS_DIRS = prev ? `${prev};${dir}` : dir;
     } catch (e: any) {

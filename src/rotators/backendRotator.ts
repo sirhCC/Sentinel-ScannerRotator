@@ -25,6 +25,7 @@ async function ensureDir(p: string) {
 
 function fileProvider(): Provider {
   const outPath = process.env.SENTINEL_BACKEND_FILE || path.join(process.cwd(), '.sentinel_secrets.json');
+  const histPath = (outPath.endsWith('.json') ? outPath.replace(/\.json$/i, '.history.ndjson') : `${outPath}.history.ndjson`);
   return {
     name: 'file',
     async put(key: string, value: string) {
@@ -34,6 +35,15 @@ function fileProvider(): Provider {
         const txt = await fs.readFile(outPath, 'utf8');
         current = JSON.parse(txt || '{}');
       } catch {}
+      const prev = current[key];
+      if (prev !== undefined && prev !== value) {
+        // append history event
+        try {
+          await ensureDir(path.dirname(histPath));
+          const evt = { ts: Date.now(), key, prev, next: value };
+          await fs.appendFile(histPath, JSON.stringify(evt) + '\n', 'utf8');
+        } catch {}
+      }
       current[key] = value;
       await ensureDir(path.dirname(outPath));
       await fs.writeFile(outPath, JSON.stringify(current, null, 2), 'utf8');
@@ -180,11 +190,11 @@ export const backendRotator: Rotator = {
   async rotate(finding, options) {
     const ts = Date.now();
     const backendName = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
-    const key = genKey(finding, ts);
+  const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || genKey(finding, ts);
 
     if (options?.dryRun) {
       const ref = buildRef(backendName, key);
-      const placeholder = options?.template
+  const placeholder = options?.template
         ? options.template
             .replace(/\{\{match\}\}/g, finding.match)
             .replace(/\{\{timestamp\}\}/g, String(ts))

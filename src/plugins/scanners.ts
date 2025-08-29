@@ -232,6 +232,16 @@ export const binaryScanner: ScannerPlugin = {
       // Guardrails
       const maxBytes = Number(process.env.SENTINEL_BIN_MAX_BYTES || '2097152'); // 2 MiB
       if (buf.length > maxBytes) return [];
+      // Quick sniff: skip if looks like binary (many non-printable or null bytes)
+      const sample = buf.subarray(0, Math.min(buf.length, 4096));
+      let nonText = 0;
+      for (let i = 0; i < sample.length; i++) {
+        const c = sample[i];
+        const isText = c === 0x09 || c === 0x0a || c === 0x0d || (c >= 0x20 && c <= 0x7e);
+        if (!isText) nonText++;
+        if (c === 0x00) { nonText = sample.length; break; }
+      }
+      if (nonText / sample.length > 0.3) return [];
       // Naive decode: try utf8; for failures, replace invalids
       const text = buf.toString('utf8');
       const findings: Finding[] = [];
