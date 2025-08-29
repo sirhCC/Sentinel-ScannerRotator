@@ -53,6 +53,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--rulesets-catalog <urlOrFile>', 'ruleset marketplace catalog (http(s):// or file path)')
   .option('--rulesets-install <names>', 'install rulesets from catalog into cache dir (comma- or space-separated)')
   .option('--rulesets-cache-dir <dir>', 'cache directory for installed rulesets (default ./.sentinel_rulesets)')
+  .option('--rulesets-require-signed', 'require ed25519 signatures for installed rulesets', false)
+  .option('--rulesets-pubkey <pemOrPath>', 'PEM public key for verifying signed rulesets (or set SENTINEL_RULESET_PUBKEY)')
   .option('--disable-builtin-rules', 'disable built-in rules (SENTINEL_DISABLE_BUILTIN_RULES=true)', false)
   .option('--issues', 'auto-create issues on fail-on-findings (file provider default)', false)
   .option('--issues-file <path>', 'issues file path for file provider (.sentinel_issues.ndjson default)')
@@ -115,7 +117,21 @@ export async function runCli(argsIn: string[]): Promise<number> {
     const names = String(opts.rulesetsInstall).split(/[,;\s]+/).filter(Boolean);
     const dir = String(opts.rulesetsCacheDir || path.join(process.cwd(), '.sentinel_rulesets'));
     try {
-      await installRulesets({ catalog: String(opts.rulesetsCatalog), names, cacheDir: dir, pubkey: process.env.SENTINEL_RULESET_PUBKEY });
+  let pubkey = process.env.SENTINEL_RULESET_PUBKEY;
+      if (opts.rulesetsPubkey) {
+        const v = String(opts.rulesetsPubkey);
+        try {
+          // If looks like a path to a file, read it; otherwise assume PEM content
+          if (v.includes('-----BEGIN') || v.includes('\n')) pubkey = v;
+          else {
+            const pem = await fs.readFile(v, 'utf8');
+            pubkey = pem;
+          }
+        } catch {
+          pubkey = v; // fallback to raw content
+        }
+      }
+      await installRulesets({ catalog: String(opts.rulesetsCatalog), names, cacheDir: dir, pubkey, requireSigned: !!opts.rulesetsRequireSigned });
       const prev = (process.env.SENTINEL_RULESETS_DIRS || '').trim();
       process.env.SENTINEL_RULESETS_DIRS = prev ? `${prev};${dir}` : dir;
     } catch (e: any) {
