@@ -59,6 +59,8 @@ export async function runCli(argsIn: string[]): Promise<number> {
   .option('--issues-provider <name>', 'issues provider: file | github (default file)')
   .option('--issues-repo <owner/name>', 'for github provider: repository, e.g., org/repo')
   .option('--metrics <path>', 'write Prometheus-format metrics to file at end of run')
+  .option('--metrics-server', 'serve Prometheus metrics over HTTP (default port 9095)', false)
+  .option('--metrics-port <n>', 'port for --metrics-server', (v) => parseInt(v, 10))
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
   .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
@@ -87,6 +89,16 @@ export async function runCli(argsIn: string[]): Promise<number> {
   // metrics init
   const { newMetrics, writeProm } = await import('./metrics.js');
   const m = newMetrics();
+  // Optional HTTP metrics server
+  let srv: any;
+  if (opts.metricsServer) {
+    try {
+      const { startMetricsServer } = await import('./server.js');
+      srv = await startMetricsServer(m, { port: opts.metricsPort });
+    } catch (e: any) {
+      console.error(e?.message || String(e));
+    }
+  }
   // Apply ruleset-related options to env to keep lower layers simple
   if (typeof opts.disableBuiltinRules === 'boolean' && opts.disableBuiltinRules) {
     process.env.SENTINEL_DISABLE_BUILTIN_RULES = 'true';
@@ -342,6 +354,9 @@ export async function runCli(argsIn: string[]): Promise<number> {
   if (auditor) await auditor.close();
   if (opts.metrics) {
     try { await writeProm(m, opts.metrics); } catch {}
+  }
+  if (srv) {
+    try { await srv.close(); } catch {}
   }
   return 0;
 }
