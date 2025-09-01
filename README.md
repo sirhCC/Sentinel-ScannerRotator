@@ -66,6 +66,7 @@ Key options:
 - `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
 - `--fail-threshold-high|--fail-threshold-medium|--fail-threshold-low <n>`: with `--fail-on-findings`, fail if per-severity counts exceed N
 - `--list-rulesets` | `--rulesets <names>` | `--rulesets-dirs <dirs>`: curated rulesets features
+- `--metrics-server` | `--metrics-port <n>`: serve Prometheus metrics over HTTP (see Metrics section)
 - `--disable-builtin-rules`: disable built-in rule set
 - `--metrics <path>`: write Prometheus metrics at end of run
 - `--issues` and `--issues-file <path>`: create issues (file provider) when failing on findings
@@ -364,6 +365,20 @@ sentinel --rulesets-catalog .\catalog.json --rulesets-install common \
 ### Binary scanning (optional)
 
 - Enable with `SENTINEL_SCAN_BINARIES=true`; scans small binary files (<= 2 MiB) by decoding to UTF-8 and applying rules.
+
+## Metrics HTTP server
+
+Expose Prometheus metrics and a simple health check over HTTP.
+
+- Start the server: pass `--metrics-server` (default port 9095) or additionally `--metrics-port <n>`.
+- Endpoints:
+  - `/healthz` returns 200 OK and the text "ok".
+  - `/metrics` returns Prometheus format metrics like:
+    - `sentinel_findings_total`
+    - `sentinel_findings_severity_total{severity="low|medium|high"}`
+    - `sentinel_rotations_total`, `sentinel_rotations_success_total`, `sentinel_rotations_failed_total`
+
+You can still write metrics to a file at the end of the run with `--metrics <path>`.
 
 ### Policy (optional)
 
