@@ -8,7 +8,17 @@ import path from 'path';
 import readline from 'readline';
 import { restoreLastBackup } from './undo.js';
 
-export async function runCli(argsIn: string[]): Promise<number> {
+export async function runCli(argsIn: string[], envOverride?: Record<string, string | undefined>): Promise<number> {
+  // Optional: apply per-invocation environment overrides (useful for tests)
+  const savedEnv: Record<string, string | undefined> = {};
+  if (envOverride && typeof envOverride === 'object') {
+    for (const [k, v] of Object.entries(envOverride)) {
+      savedEnv[k] = process.env[k];
+      if (v === undefined) delete (process.env as any)[k];
+      else (process.env as any)[k] = v;
+    }
+  }
+  try {
   // Early subcommand: undo
   if (argsIn[0] === 'undo') {
     const target = argsIn[1];
@@ -395,6 +405,15 @@ export async function runCli(argsIn: string[]): Promise<number> {
     try { await srv.close(); } catch {}
   }
   return 0;
+  } finally {
+    // restore env
+    if (envOverride && typeof envOverride === 'object') {
+      for (const [k, v] of Object.entries(savedEnv)) {
+        if (v === undefined) delete (process.env as any)[k];
+        else (process.env as any)[k] = v;
+      }
+    }
+  }
 }
 
 // Note: No top-level execution here. See src/cli.ts for the CLI entry point.
