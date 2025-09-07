@@ -36,5 +36,5 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           target: minor
-          merge-method: squash
+          use-github-auto-merge: true
         continue-on-error: true
