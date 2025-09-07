@@ -13,7 +13,13 @@ export const applyRotator: Rotator = {
       : `__REPLACED_SECRET_${ts}__`;
     const res = await safeUpdate(
       finding.filePath,
-      (content) => content.replace(finding.match, placeholder)
+      (content) => {
+        // Replace all occurrences of the exact matched string
+        if (!finding.match) return content;
+        // Escape special regex chars and use global replacement
+        const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return content.replace(new RegExp(esc, 'g'), placeholder);
+      }
     );
     if (res.success) return { success: true, message: `Replaced in ${finding.filePath} (backup: ${res.backupPath})` };
     return { success: false, message: `Failed to replace in ${finding.filePath}: ${res.error}` };

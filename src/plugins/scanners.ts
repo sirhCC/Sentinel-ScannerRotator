@@ -47,6 +47,11 @@ export const textScanner: ScannerPlugin = {
   supports: () => true, // fallback for regular files
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    // Precompile regexes once per file to avoid re-instantiation per line
+    const COMPILED = SECRET_REGEXES.map(s => ({
+      s,
+      re: new RegExp(s.re.source, s.re.flags),
+    }));
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
@@ -55,9 +60,9 @@ export const textScanner: ScannerPlugin = {
   const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      for (const s of SECRET_REGEXES) {
+      for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
-        const re = new RegExp(s.re.source, s.re.flags);
+        re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
           findings.push({
             filePath,
@@ -119,6 +124,7 @@ export const envScanner: ScannerPlugin = {
   },
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
@@ -128,9 +134,9 @@ export const envScanner: ScannerPlugin = {
   const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      for (const s of SECRET_REGEXES) {
+      for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
-        const re = new RegExp(s.re.source, s.re.flags);
+        re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
           findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
@@ -171,6 +177,7 @@ export const dockerScanner: ScannerPlugin = {
   },
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
     const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const content = await fs.readFile(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
@@ -179,9 +186,9 @@ export const dockerScanner: ScannerPlugin = {
   const hook = await getMlHook();
   for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      for (const s of SECRET_REGEXES) {
+      for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
-        const re = new RegExp(s.re.source, s.re.flags);
+        re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
           findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
@@ -273,7 +280,8 @@ export const zipScanner: ScannerPlugin = {
     if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
     const buf = await fs.readFile(filePath);
     const zip = await JSZip.loadAsync(buf);
-    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_ZIP_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_ZIP_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
@@ -300,9 +308,9 @@ export const zipScanner: ScannerPlugin = {
       const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-    for (const s of SECRET_REGEXES) {
+    for (const { s, re } of COMPILED) {
           let m: RegExpExecArray | null;
-          const re = new RegExp(s.re.source, s.re.flags);
+          re.lastIndex = 0;
           while ((m = re.exec(line)) !== null) {
             findings.push({
               filePath: `${filePath}:${entry.name}`,
@@ -341,6 +349,7 @@ export const tarGzScanner: ScannerPlugin = {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
     if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
@@ -377,9 +386,9 @@ export const tarGzScanner: ScannerPlugin = {
           const lines = content.split(/\r?\n/);
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-    for (const s of SECRET_REGEXES) {
-              let m: RegExpExecArray | null;
-              const re = new RegExp(s.re.source, s.re.flags);
+  for (const { s, re } of COMPILED) {
+        let m: RegExpExecArray | null;
+        re.lastIndex = 0;
               while ((m = re.exec(line)) !== null) {
                 findings.push({
                   filePath: `${filePath}:${header.name}`,

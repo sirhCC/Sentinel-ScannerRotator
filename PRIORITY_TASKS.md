@@ -1,3 +1,14 @@
+# High-Priority Tasks
+
+- Precompile regexes per scan to reduce CPU (done)
+- Replace all occurrences for file updates (apply/backend) (done)
+- Aggregate per-file edits into a single write (pending)
+- Stream large text files (line-by-line) to cap memory (pending)
+- Global archive byte/entry budgets and streaming ZIP (pending)
+- Cache optimization: reuse buffer for hashing in hash-mode (pending)
+- Strengthen policy enforcement semantics (minSeverity, thresholds) (pending)
+
+Note: after each change, run the full test suite: `npm test`.
 # Priority work list — SecretSentinel-ScannerRotator
 
 This file is a single, ordered list of work to do for the project. Highest priority items are at the top. Use this as the single source of truth and work sequentially from top to bottom unless blockers are reported.
