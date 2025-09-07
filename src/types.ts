@@ -8,6 +8,12 @@ export type Finding = {
   severity?: 'low' | 'medium' | 'high';
 };
 
+// Optional richer result for scanners that can compute a file hash while scanning
+export type ScanResult = {
+  findings: Finding[];
+  computedHash?: string;
+};
+
 export interface Rotator {
   name: string;
   rotate(
