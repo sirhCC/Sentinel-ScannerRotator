@@ -5,6 +5,7 @@ import { loadIgnorePatterns } from "./ignore.js";
 import { loadCache, saveCache, CacheData } from './cache.js';
 import { getScannerPlugins } from './plugins/scanners.js';
 import crypto from 'crypto';
+import { Worker } from 'worker_threads';
 
 type ScanOptions = {
   concurrency?: number;
@@ -43,7 +44,19 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
     cache = await loadCache(cachePath);
   }
   const out: Finding[] = [];
-  // simple worker pool
+  // Optional worker_threads pool (disabled in tests by default)
+  let pool: WorkerPool | undefined;
+  try {
+    const disableInTest = !!(process.env.VITEST || process.env.NODE_ENV === 'test');
+    const requested = Number(process.env.SENTINEL_WORKERS || '0');
+    const count = disableInTest ? 0 : Math.max(0, requested);
+    if (count > 0) {
+      pool = await WorkerPool.tryCreate(count);
+    }
+  } catch {
+    pool = undefined;
+  }
+  // simple worker loop (uses pool when available)
   let idx = 0;
   const scannedKeys = new Set<string>();
   async function worker() {
@@ -77,7 +90,7 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
             }
           }
           if (servedFromCache) continue;
-          const r = await scanFileWithHash(file, baseDir);
+          const r = pool ? await pool.scan(file, baseDir) : await scanFileWithHash(file, baseDir);
           out.push(...r.findings);
           let hash: string | undefined;
           if (cacheMode === 'hash') {
@@ -94,7 +107,7 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
           continue;
         }
         // no cache
-        const r = await scanFileWithHash(file, baseDir);
+        const r = pool ? await pool.scan(file, baseDir) : await scanFileWithHash(file, baseDir);
         out.push(...r.findings);
       } catch {
         // ignore
@@ -140,4 +153,74 @@ async function scanFileWithHash(filePath: string, baseDir?: string): Promise<Sca
   const plugins = getScannerPlugins();
   const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
   return plugin.scan(filePath, baseDir ?? path.dirname(filePath));
+}
+
+// Lightweight worker pool wrapper
+class WorkerPool {
+  private workers: Worker[] = [];
+  private idle: Worker[] = [];
+  private queue: Array<{ file: string; baseDir?: string; resolve: (r: ScanResult) => void; reject: (e: any) => void }>=[];
+  private constructor(private workerFile: string, size: number) {
+    for (let i = 0; i < size; i++) {
+      const w = new Worker(workerFile, { execArgv: [], env: process.env as any });
+      this.bind(w);
+      this.workers.push(w);
+      this.idle.push(w);
+    }
+  }
+  static async tryCreate(size: number): Promise<WorkerPool | undefined> {
+    // prefer dist/worker/scanWorker.js
+    const candidate = path.resolve(process.cwd(), 'dist', 'worker', 'scanWorker.js');
+    try {
+      const st = await fs.stat(candidate);
+      if (!st.isFile()) return undefined;
+      return new WorkerPool(candidate, size);
+    } catch {
+      return undefined;
+    }
+  }
+  private bind(w: Worker) {
+    w.on('message', (msg: any) => {
+      const task = this.currentTaskMap.get(w);
+      if (!task) return;
+      this.currentTaskMap.delete(w);
+      this.idle.push(w);
+      if (msg && msg.ok && msg.result) task.resolve(msg.result as ScanResult);
+      else if (msg && msg.error) task.reject(new Error(String(msg.error)));
+      else task.resolve({ findings: [] });
+      this.pump();
+    });
+    w.on('error', (err) => {
+      const task = this.currentTaskMap.get(w);
+      this.currentTaskMap.delete(w);
+      this.idle = this.idle.filter(x => x !== w);
+      if (task) task.reject(err);
+    });
+    w.on('exit', () => {
+      this.idle = this.idle.filter(x => x !== w);
+      this.workers = this.workers.filter(x => x !== w);
+    });
+  }
+  private currentTaskMap = new Map<Worker, { file: string; baseDir?: string; resolve: (r: ScanResult) => void; reject: (e: any) => void }>();
+  private pump() {
+    while (this.idle.length && this.queue.length) {
+      const w = this.idle.pop()!;
+      const t = this.queue.shift()!;
+      this.currentTaskMap.set(w, t);
+      w.postMessage({ filePath: t.file, baseDir: t.baseDir });
+    }
+  }
+  scan(file: string, baseDir?: string): Promise<ScanResult> {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ file, baseDir, resolve, reject });
+      this.pump();
+    });
+  }
+  destroy() {
+    for (const w of this.workers) {
+      try { void w.terminate(); } catch {}
+    }
+    this.workers = [];
+    this.idle = [];
+  }
 }
