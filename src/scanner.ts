@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { Finding } from "./types.js";
+import { Finding, ScanResult } from "./types.js";
 import { loadIgnorePatterns } from "./ignore.js";
 import { loadCache, saveCache, CacheData } from './cache.js';
 import { getScannerPlugins } from './plugins/scanners.js';
@@ -77,8 +77,8 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
             }
           }
           if (servedFromCache) continue;
-          const r = await scanFile(file, baseDir);
-          out.push(...r);
+          const r = await scanFileWithHash(file, baseDir);
+          out.push(...r.findings);
           let hash: string | undefined;
           if (cacheMode === 'hash') {
             try {
@@ -86,17 +86,16 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
               if (precomputedHash) {
                 hash = precomputedHash;
               } else {
-                const buf = await fs.readFile(file);
-                hash = crypto.createHash('sha256').update(buf).digest('hex');
+                hash = r.computedHash ?? (await (async () => { const buf = await fs.readFile(file); return crypto.createHash('sha256').update(buf).digest('hex'); })());
               }
             } catch {}
           }
-          cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r, hash };
+          cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r.findings, hash };
           continue;
         }
         // no cache
-        const r = await scanFile(file, baseDir);
-        out.push(...r);
+        const r = await scanFileWithHash(file, baseDir);
+        out.push(...r.findings);
       } catch {
         // ignore
       }
@@ -131,6 +130,13 @@ async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: stri
 
 export async function scanFile(filePath: string, baseDir?: string): Promise<Finding[]> {
   // Choose a scanner plugin based on file type; fallback to text
+  const plugins = getScannerPlugins();
+  const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
+  const res = await plugin.scan(filePath, baseDir ?? path.dirname(filePath));
+  return res.findings;
+}
+
+async function scanFileWithHash(filePath: string, baseDir?: string): Promise<ScanResult> {
   const plugins = getScannerPlugins();
   const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
   return plugin.scan(filePath, baseDir ?? path.dirname(filePath));
