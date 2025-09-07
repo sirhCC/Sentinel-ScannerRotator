@@ -28,13 +28,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Auto-merge Dependabot PRs (patch/minor)
+      - name: Enable GitHub auto-merge (patch/minor)
         if: >-
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        uses: fastify/github-action-merge-dependabot@v3
+        uses: peter-evans/enable-pull-request-automerge@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          target: minor
-          use-github-auto-merge: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
         continue-on-error: true
