@@ -2,10 +2,10 @@
 
 - Precompile regexes per scan to reduce CPU (done)
 - Replace all occurrences for file updates (apply/backend) (done)
-- Aggregate per-file edits into a single write (pending)
-- Stream large text files (line-by-line) to cap memory (pending)
-- Global archive byte/entry budgets and streaming ZIP (pending)
-- Cache optimization: reuse buffer for hashing in hash-mode (pending)
+- Aggregate per-file edits into a single write (done)
+- Stream large text files (line-by-line) to cap memory (done)
+- Global archive byte/entry budgets and streaming ZIP (done)
+- Cache optimization: reuse buffer for hashing in hash-mode (done)
 - Strengthen policy enforcement semantics (minSeverity, thresholds) (pending)
 
 Note: after each change, run the full test suite: `npm test`.

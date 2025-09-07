@@ -58,11 +58,14 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
           const st = await fs.stat(file);
           const ce = cache.entries[key];
           let servedFromCache = false;
+          // When in hash mode, compute the hash at most once and reuse it later on save
+          let precomputedHash: string | undefined;
           if (ce && ce.mtimeMs === st.mtimeMs && ce.size === st.size) {
             if (cacheMode === 'hash') {
               try {
                 const buf = await fs.readFile(file);
                 const h = crypto.createHash('sha256').update(buf).digest('hex');
+                precomputedHash = h;
                 if (ce.hash && ce.hash === h) {
                   out.push(...ce.findings);
                   servedFromCache = true;
@@ -79,8 +82,13 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
           let hash: string | undefined;
           if (cacheMode === 'hash') {
             try {
-              const buf = await fs.readFile(file);
-              hash = crypto.createHash('sha256').update(buf).digest('hex');
+              // Reuse the earlier computed hash when available to avoid an extra read
+              if (precomputedHash) {
+                hash = precomputedHash;
+              } else {
+                const buf = await fs.readFile(file);
+                hash = crypto.createHash('sha256').update(buf).digest('hex');
+              }
             } catch {}
           }
           cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r, hash };
