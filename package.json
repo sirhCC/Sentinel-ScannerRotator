@@ -22,7 +22,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-  "@types/jszip": "^3.1.0",
+  "@types/jszip": "^3.4.1",
   "@types/node": "^20.19.13",
   "@types/tar-stream": "^3.1.2",
   "@typescript-eslint/eslint-plugin": "^8.42.0",
