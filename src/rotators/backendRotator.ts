@@ -225,7 +225,11 @@ export const backendRotator: Rotator = {
         : ref;
       const res = await safeUpdate(
         finding.filePath,
-        (content) => content.replace(finding.match, placeholder)
+        (content) => {
+          if (!finding.match) return content;
+          const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return content.replace(new RegExp(esc, 'g'), placeholder);
+        }
       );
     if (res.success) return { success: true, message: `Stored secret in ${provider.name} and replaced in ${finding.filePath} (backup: ${res.backupPath})` };
     // rollback provider on failure
