@@ -1,7 +1,8 @@
 name: Auto-merge Dependabot
 
 on:
-  pull_request:
+  # Use pull_request_target to ensure the workflow runs in the context of the base repo
+  pull_request_target:
     types: [opened, synchronize, reopened]
   pull_request_review:
     types: [submitted, edited, dismissed]
@@ -16,13 +17,24 @@ permissions:
 
 jobs:
   automerge:
+    # Only act on Dependabot PRs/events
     if: >-
       ${{ github.actor == 'dependabot[bot]' || github.actor == 'dependabot' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Auto-merge Dependabot PRs (patch/minor)
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
         uses: fastify/github-action-merge-dependabot@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           target: minor
           merge-method: squash
+        continue-on-error: true
