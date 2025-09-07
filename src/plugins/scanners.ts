@@ -5,6 +5,7 @@ import { pathToFileURL } from 'url';
 import JSZip from 'jszip';
 import tar from 'tar-stream';
 import zlib from 'zlib';
+import readline from 'readline';
 import { Finding } from '../types.js';
 import { loadRules } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
@@ -52,21 +53,32 @@ export const textScanner: ScannerPlugin = {
       s,
       re: new RegExp(s.re.source, s.re.flags),
     }));
-    const content = await fs.readFile(filePath, 'utf8');
-    const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
   const hook = await getMlHook();
-  for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0'); // 0 = unlimited
+    const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
+    let readBytes = 0;
+    let aborted = false;
+    if (maxBytes > 0) {
+      rs.on('data', (chunk: string | Buffer) => {
+        const inc = typeof chunk === 'string' ? Buffer.byteLength(chunk, 'utf8') : chunk.length;
+        readBytes += inc;
+        if (!aborted && readBytes > maxBytes) { aborted = true; rs.destroy(); }
+      });
+    }
+    const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    let lineNo = 0;
+    for await (const line of rl) {
+      lineNo++;
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
           findings.push({
             filePath,
-            line: i + 1,
+            line: lineNo,
             column: m.index + 1,
             match: m[0],
             context: line.trim().slice(0, 200),
@@ -77,12 +89,12 @@ export const textScanner: ScannerPlugin = {
       }
       if (hook) {
         try {
-          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          const tokens = await hook(line, { filePath, lineNumber: lineNo });
           if (tokens && Array.isArray(tokens)) {
             for (const t of tokens) {
               findings.push({
                 filePath,
-                line: i + 1,
+                line: lineNo,
                 column: t.index + 1,
                 match: t.token,
                 context: line.trim().slice(0, 200),
@@ -98,7 +110,7 @@ export const textScanner: ScannerPlugin = {
         for (const h of hits) {
           findings.push({
             filePath,
-            line: i + 1,
+            line: lineNo,
             column: h.index + 1,
             match: h.token,
             context: line.trim().slice(0, 200),
@@ -125,34 +137,45 @@ export const envScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
-    const content = await fs.readFile(filePath, 'utf8');
-    const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
     // built-in regexes
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
   const hook = await getMlHook();
-  for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0');
+    const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
+    let readBytes = 0;
+    let aborted = false;
+    if (maxBytes > 0) {
+      rs.on('data', (chunk: string | Buffer) => {
+        const inc = typeof chunk === 'string' ? Buffer.byteLength(chunk, 'utf8') : chunk.length;
+        readBytes += inc;
+        if (!aborted && readBytes > maxBytes) { aborted = true; rs.destroy(); }
+      });
+    }
+    const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    let lineNo = 0;
+    for await (const line of rl) {
+      lineNo++;
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
-          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
+          findings.push({ filePath, line: lineNo, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
       // sensitive key heuristics
       const kv = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)\s*$/; // .env format
       const mm = kv.exec(line);
       if (mm && sensitiveKeyRegex().test(mm[1]) && (mm[2].length >= 12)) {
-        findings.push({ filePath, line: i + 1, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
+        findings.push({ filePath, line: lineNo, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
       }
       if (hook) {
         try {
-          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          const tokens = await hook(line, { filePath, lineNumber: lineNo });
           if (tokens && Array.isArray(tokens)) {
             for (const t of tokens) {
-              findings.push({ filePath, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
             }
           }
         } catch {}
@@ -160,7 +183,7 @@ export const envScanner: ScannerPlugin = {
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
         for (const h of hits) {
-          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
+          findings.push({ filePath, line: lineNo, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
     }
@@ -178,33 +201,44 @@ export const dockerScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
     const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
-    const content = await fs.readFile(filePath, 'utf8');
-    const lines = content.split(/\r?\n/);
     const findings: Finding[] = [];
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
   const hook = await getMlHook();
-  for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0');
+    const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
+    let readBytes = 0;
+    let aborted = false;
+    if (maxBytes > 0) {
+      rs.on('data', (chunk: string | Buffer) => {
+        const inc = typeof chunk === 'string' ? Buffer.byteLength(chunk, 'utf8') : chunk.length;
+        readBytes += inc;
+        if (!aborted && readBytes > maxBytes) { aborted = true; rs.destroy(); }
+      });
+    }
+    const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    let lineNo = 0;
+    for await (const line of rl) {
+      lineNo++;
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
-          findings.push({ filePath, line: i + 1, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
+          findings.push({ filePath, line: lineNo, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
       // ENV/ARG key=value
       const mm = /^\s*(ENV|ARG)\s+([A-Za-z_][A-Za-z0-9_]*)=(.+)\s*$/i.exec(line);
       if (mm && sensitiveKeyRegex().test(mm[2]) && (mm[3].length >= 12)) {
         const value = mm[3];
-        findings.push({ filePath, line: i + 1, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
+        findings.push({ filePath, line: lineNo, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
       }
       if (hook) {
         try {
-          const tokens = await hook(line, { filePath, lineNumber: i + 1 });
+          const tokens = await hook(line, { filePath, lineNumber: lineNo });
           if (tokens && Array.isArray(tokens)) {
             for (const t of tokens) {
-              findings.push({ filePath, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
             }
           }
         } catch {}
@@ -212,7 +246,7 @@ export const dockerScanner: ScannerPlugin = {
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
         for (const h of hits) {
-          findings.push({ filePath, line: i + 1, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
+          findings.push({ filePath, line: lineNo, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
     }
@@ -278,6 +312,9 @@ export const zipScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
     if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
+  const fileStat = await fs.stat(filePath).catch(() => undefined as any);
+  const fileMax = Number(process.env.SENTINEL_ZIP_FILE_MAX_BYTES || '0');
+  if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return [];
     const buf = await fs.readFile(filePath);
     const zip = await JSZip.loadAsync(buf);
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
@@ -286,6 +323,10 @@ export const zipScanner: ScannerPlugin = {
     const maxEntries = Number(process.env.SENTINEL_ZIP_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_ZIP_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
     const maxBytes = Number(process.env.SENTINEL_ZIP_MAX_BYTES || '10485760'); // 10 MiB
+  const globalMax = Number(process.env.SENTINEL_ARCHIVES_GLOBAL_MAX_BYTES || '0'); // 0 = unlimited
+  // Module-level global tracker
+  const g = globalThis as unknown as { __sentinelArchiveBytes?: number };
+  if (g.__sentinelArchiveBytes === undefined) g.__sentinelArchiveBytes = 0;
     let count = 0;
     let totalBytes = 0;
     type ZipEntry = { dir?: boolean; name: string; async: (t: 'string') => Promise<string> };
@@ -301,10 +342,12 @@ export const zipScanner: ScannerPlugin = {
       } catch {
         continue;
       }
-      const bytes = Buffer.byteLength(content, 'utf8');
+  const bytes = Buffer.byteLength(content, 'utf8');
       if (bytes > maxEntryBytes) continue;
-      if (totalBytes + bytes > maxBytes) break;
-      totalBytes += bytes;
+  if (totalBytes + bytes > maxBytes) break;
+  if (globalMax > 0 && (g.__sentinelArchiveBytes + bytes > globalMax)) break;
+  totalBytes += bytes;
+  g.__sentinelArchiveBytes += bytes;
       const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -354,6 +397,12 @@ export const tarGzScanner: ScannerPlugin = {
     const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
     const maxBytes = Number(process.env.SENTINEL_TAR_MAX_BYTES || '10485760'); // 10 MiB
+  const fileStat = await fs.stat(filePath).catch(() => undefined as any);
+  const fileMax = Number(process.env.SENTINEL_TAR_FILE_MAX_BYTES || '0');
+  if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return [];
+  const globalMax = Number(process.env.SENTINEL_ARCHIVES_GLOBAL_MAX_BYTES || '0');
+  const g = globalThis as unknown as { __sentinelArchiveBytes?: number };
+  if (g.__sentinelArchiveBytes === undefined) g.__sentinelArchiveBytes = 0;
     let count = 0;
     let totalBytes = 0;
     await new Promise<void>((resolve, reject) => {
@@ -375,13 +424,17 @@ export const tarGzScanner: ScannerPlugin = {
         let entryBytes = 0;
         stream.on('data', (chunk: Buffer) => {
           entryBytes += chunk.length;
-          if (entryBytes <= maxEntryBytes && totalBytes + entryBytes <= maxBytes) parts.push(chunk);
+          if (entryBytes <= maxEntryBytes && totalBytes + entryBytes <= maxBytes && (globalMax === 0 || (g.__sentinelArchiveBytes as number) + totalBytes + entryBytes <= globalMax)) parts.push(chunk);
         });
         stream.on('end', () => {
           if (entryBytes > maxEntryBytes || totalBytes + entryBytes > maxBytes) {
             return next();
           }
+          if (globalMax > 0 && ((g.__sentinelArchiveBytes as number) + entryBytes > globalMax)) {
+            return next();
+          }
           totalBytes += entryBytes;
+          g.__sentinelArchiveBytes = (g.__sentinelArchiveBytes as number) + entryBytes;
           const content = Buffer.concat(parts).toString('utf8');
           const lines = content.split(/\r?\n/);
           for (let i = 0; i < lines.length; i++) {
