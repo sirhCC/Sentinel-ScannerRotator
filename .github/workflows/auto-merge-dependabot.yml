@@ -1,0 +1,28 @@
+name: Auto-merge Dependabot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  automerge:
+    if: >-
+      ${{ github.actor == 'dependabot[bot]' || github.actor == 'dependabot' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-merge Dependabot PRs (patch/minor)
+        uses: fastify/github-action-merge-dependabot@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          target: minor
+          merge-method: squash
