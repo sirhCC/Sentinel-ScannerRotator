@@ -6,14 +6,14 @@ import JSZip from 'jszip';
 import tar from 'tar-stream';
 import zlib from 'zlib';
 import readline from 'readline';
-import { Finding } from '../types.js';
+import { Finding, ScanResult } from '../types.js';
 import { loadRules } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
 
 export type ScannerPlugin = {
   name: string;
   supports(filePath: string): boolean;
-  scan(filePath: string, baseDir?: string): Promise<Finding[]>;
+  scan(filePath: string, baseDir?: string): Promise<ScanResult>;
 };
 
 type MlToken = { token: string; index: number; ruleName?: string; severity?: 'low'|'medium'|'high' };
@@ -46,17 +46,15 @@ async function loadSecretRegexes(baseDir?: string) {
 export const textScanner: ScannerPlugin = {
   name: 'text',
   supports: () => true, // fallback for regular files
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-    // Precompile regexes once per file to avoid re-instantiation per line
-    const COMPILED = SECRET_REGEXES.map(s => ({
-      s,
-      re: new RegExp(s.re.source, s.re.flags),
-    }));
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
+    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const findings: Finding[] = [];
-  const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
-  const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
-  const hook = await getMlHook();
+    const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+    const hasher = hashMode ? (await import('crypto')).createHash('sha256') : undefined;
+    const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
+    const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
+    const hook = await getMlHook();
     const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0'); // 0 = unlimited
     const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
     let readBytes = 0;
@@ -72,19 +70,12 @@ export const textScanner: ScannerPlugin = {
     let lineNo = 0;
     for await (const line of rl) {
       lineNo++;
+      if (hasher) hasher.update(line + '\n');
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {
-          findings.push({
-            filePath,
-            line: lineNo,
-            column: m.index + 1,
-            match: m[0],
-            context: line.trim().slice(0, 200),
-            ruleName: s.name,
-            severity: s.severity,
-          });
+          findings.push({ filePath, line: lineNo, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
       if (hook) {
@@ -92,15 +83,7 @@ export const textScanner: ScannerPlugin = {
           const tokens = await hook(line, { filePath, lineNumber: lineNo });
           if (tokens && Array.isArray(tokens)) {
             for (const t of tokens) {
-              findings.push({
-                filePath,
-                line: lineNo,
-                column: t.index + 1,
-                match: t.token,
-                context: line.trim().slice(0, 200),
-                ruleName: t.ruleName || 'ML-Hook',
-                severity: t.severity || 'medium',
-              });
+              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
             }
           }
         } catch {}
@@ -108,19 +91,12 @@ export const textScanner: ScannerPlugin = {
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
         for (const h of hits) {
-          findings.push({
-            filePath,
-            line: lineNo,
-            column: h.index + 1,
-            match: h.token,
-            context: line.trim().slice(0, 200),
-            ruleName: 'High-Entropy Token',
-            severity: 'medium',
-          });
+          findings.push({ filePath, line: lineNo, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
     }
-    return findings;
+    const computedHash = hasher ? hasher.digest('hex') : undefined;
+    return { findings, computedHash };
   },
 };
 
@@ -134,10 +110,12 @@ export const envScanner: ScannerPlugin = {
     const b = path.basename(filePath).toLowerCase();
     return b === '.env' || b.startsWith('.env.') || b.endsWith('.env');
   },
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
-    const findings: Finding[] = [];
+  const findings: Finding[] = [];
+  const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+  const hasher = hashMode ? await import('crypto').then(m => m.createHash('sha256')) : undefined;
     // built-in regexes
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
@@ -156,7 +134,8 @@ export const envScanner: ScannerPlugin = {
     const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
     let lineNo = 0;
     for await (const line of rl) {
-      lineNo++;
+  lineNo++;
+  if (hasher) hasher.update(line + '\n');
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
@@ -187,7 +166,8 @@ export const envScanner: ScannerPlugin = {
         }
       }
     }
-    return findings;
+  const computedHash = hasher ? hasher.digest('hex') : undefined;
+  return { findings, computedHash };
   },
 };
 
@@ -198,10 +178,12 @@ export const dockerScanner: ScannerPlugin = {
     const l = b.toLowerCase();
     return b === 'Dockerfile' || l.startsWith('dockerfile.') || l.endsWith('.dockerfile');
   },
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
-    const findings: Finding[] = [];
+  const findings: Finding[] = [];
+  const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+  const hasher = hashMode ? await import('crypto').then(m => m.createHash('sha256')) : undefined;
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
   const hook = await getMlHook();
@@ -219,7 +201,8 @@ export const dockerScanner: ScannerPlugin = {
     const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
     let lineNo = 0;
     for await (const line of rl) {
-      lineNo++;
+  lineNo++;
+  if (hasher) hasher.update(line + '\n');
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
@@ -250,7 +233,8 @@ export const dockerScanner: ScannerPlugin = {
         }
       }
     }
-    return findings;
+  const computedHash = hasher ? hasher.digest('hex') : undefined;
+  return { findings, computedHash };
   },
 };
 
@@ -264,15 +248,15 @@ export const binaryScanner: ScannerPlugin = {
     if (!ext) return true;
     return !textExts.includes(ext);
   },
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const allow = (process.env.SENTINEL_SCAN_BINARIES ?? 'false').toLowerCase();
-    if (!(allow === 'true' || allow === '1' || allow === 'yes')) return [];
+    if (!(allow === 'true' || allow === '1' || allow === 'yes')) return { findings: [] };
     const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     try {
       const buf = await fs.readFile(filePath);
       // Guardrails
       const maxBytes = Number(process.env.SENTINEL_BIN_MAX_BYTES || '2097152'); // 2 MiB
-      if (buf.length > maxBytes) return [];
+      if (buf.length > maxBytes) return { findings: [] };
       // Quick sniff: skip if looks like binary (many non-printable or null bytes)
       const sample = buf.subarray(0, Math.min(buf.length, 4096));
       let nonText = 0;
@@ -282,7 +266,7 @@ export const binaryScanner: ScannerPlugin = {
         if (!isText) nonText++;
         if (c === 0x00) { nonText = sample.length; break; }
       }
-      if (nonText / sample.length > 0.3) return [];
+      if (nonText / sample.length > 0.3) return { findings: [] };
       // Naive decode: try utf8; for failures, replace invalids
       const text = buf.toString('utf8');
       const findings: Finding[] = [];
@@ -297,9 +281,11 @@ export const binaryScanner: ScannerPlugin = {
           }
         }
       }
-      return findings;
+      const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+      const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update(buf).digest('hex') : undefined;
+      return { findings, computedHash };
     } catch {
-      return [];
+      return { findings: [] };
     }
   },
 };
@@ -309,13 +295,15 @@ export const zipScanner: ScannerPlugin = {
   supports(filePath: string) {
     return filePath.toLowerCase().endsWith('.zip');
   },
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
-    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
+    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return { findings: [] };
   const fileStat = await fs.stat(filePath).catch(() => undefined as any);
   const fileMax = Number(process.env.SENTINEL_ZIP_FILE_MAX_BYTES || '0');
-  if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return [];
+    if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return { findings: [] };
     const buf = await fs.readFile(filePath);
+    const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+    const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update(buf).digest('hex') : undefined;
     const zip = await JSZip.loadAsync(buf);
   const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
   const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
@@ -378,7 +366,7 @@ export const zipScanner: ScannerPlugin = {
         }
       }
     }
-    return findings;
+  return { findings, computedHash };
   },
 };
 
@@ -388,26 +376,29 @@ export const tarGzScanner: ScannerPlugin = {
     const l = filePath.toLowerCase();
     return l.endsWith('.tar.gz') || l.endsWith('.tgz');
   },
-  async scan(filePath: string, baseDir?: string): Promise<Finding[]> {
+  async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
-    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return [];
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+    if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return { findings: [] } as any;
+    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
     const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
     const maxBytes = Number(process.env.SENTINEL_TAR_MAX_BYTES || '10485760'); // 10 MiB
-  const fileStat = await fs.stat(filePath).catch(() => undefined as any);
-  const fileMax = Number(process.env.SENTINEL_TAR_FILE_MAX_BYTES || '0');
-  if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return [];
-  const globalMax = Number(process.env.SENTINEL_ARCHIVES_GLOBAL_MAX_BYTES || '0');
-  const g = globalThis as unknown as { __sentinelArchiveBytes?: number };
-  if (g.__sentinelArchiveBytes === undefined) g.__sentinelArchiveBytes = 0;
+    const fileStat = await fs.stat(filePath).catch(() => undefined as any);
+    const fileMax = Number(process.env.SENTINEL_TAR_FILE_MAX_BYTES || '0');
+    if (fileMax > 0 && fileStat?.size && fileStat.size > fileMax) return { findings: [] } as any;
+    const globalMax = Number(process.env.SENTINEL_ARCHIVES_GLOBAL_MAX_BYTES || '0');
+    const g = globalThis as unknown as { __sentinelArchiveBytes?: number };
+    if (g.__sentinelArchiveBytes === undefined) g.__sentinelArchiveBytes = 0;
+    const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+    const cryptoMod = hashMode ? await import('crypto') : undefined;
+    const hasher = cryptoMod ? cryptoMod.createHash('sha256') : undefined;
     let count = 0;
     let totalBytes = 0;
     await new Promise<void>((resolve, reject) => {
       const extract = tar.extract();
-  extract.on('entry', (header: { name: string; type: string; size?: number }, stream: NodeJS.ReadableStream, next: () => void) => {
+      extract.on('entry', (header: { name: string; type: string; size?: number }, stream: NodeJS.ReadableStream, next: () => void) => {
         if (count++ >= maxEntries) {
           stream.resume();
           return next();
@@ -422,9 +413,10 @@ export const tarGzScanner: ScannerPlugin = {
         }
         const parts: Buffer[] = [];
         let entryBytes = 0;
-        stream.on('data', (chunk: Buffer) => {
-          entryBytes += chunk.length;
-          if (entryBytes <= maxEntryBytes && totalBytes + entryBytes <= maxBytes && (globalMax === 0 || (g.__sentinelArchiveBytes as number) + totalBytes + entryBytes <= globalMax)) parts.push(chunk);
+        stream.on('data', (chunk: any) => {
+          const b: Buffer = typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer);
+          entryBytes += b.length;
+          if (entryBytes <= maxEntryBytes && totalBytes + entryBytes <= maxBytes && (globalMax === 0 || (g.__sentinelArchiveBytes as number) + totalBytes + entryBytes <= globalMax)) parts.push(b);
         });
         stream.on('end', () => {
           if (entryBytes > maxEntryBytes || totalBytes + entryBytes > maxBytes) {
@@ -481,10 +473,22 @@ export const tarGzScanner: ScannerPlugin = {
       const gunzip = zlib.createGunzip();
       gunzip.on('error', (e: unknown) => reject(e instanceof Error ? e : new Error(String(e))));
       const rs = fsSync.createReadStream(filePath);
+      if (hasher) {
+        rs.on('data', (chunk: any) => {
+          try {
+            if (typeof chunk === 'string') {
+              hasher.update(Buffer.from(chunk));
+            } else {
+              hasher.update(chunk as Buffer);
+            }
+          } catch {}
+        });
+      }
       rs.on('error', (e: unknown) => reject(e instanceof Error ? e : new Error(String(e))));
       rs.pipe(gunzip).pipe(extract);
     });
-    return findings;
+    const computedHash = hasher ? hasher.digest('hex') : undefined;
+    return { findings, computedHash } as any;
   },
 };
 
