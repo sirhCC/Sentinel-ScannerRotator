@@ -80,6 +80,8 @@ Environment options:
 - `SENTINEL_ENTROPY`: enable high-entropy token detection (`true`/`1`/`yes`).
 - `SENTINEL_ENTROPY_THRESHOLD`: entropy threshold in bits/char (default 3.5)
 - `SENTINEL_ENTROPY_MINLEN`: minimum token length to consider (default 32)
+- `SENTINEL_REGEX_ENGINE`: optional regex engine; `native` (default) or `re2`. When set to `re2` and the `re2` package is available, patterns compile with RE2 for safer backtracking. If `re2` isn’t installed or a specific pattern isn’t supported, the scanner falls back to native `RegExp` per rule.
+- `SENTINEL_WORKERS`: optional worker pool size for scanning with worker_threads (e.g., `4`). Disabled during tests by default. Requires built artifacts (`npm run build`) so the pool can load `dist/worker/scanWorker.js`.
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation; 4 failed due to findings (with --fail-on-findings).
 
@@ -315,6 +317,7 @@ Verification: add `--verify` to read back the stored value before modifying file
   - ZIP guardrails: `SENTINEL_ZIP_MAX_ENTRIES` (default 1000), `SENTINEL_ZIP_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_ZIP_MAX_BYTES` (default 10 MiB).
   - TAR.GZ guardrails: `SENTINEL_TAR_MAX_ENTRIES` (default 1000), `SENTINEL_TAR_MAX_ENTRY_BYTES` (default 1 MiB), `SENTINEL_TAR_MAX_BYTES` (default 10 MiB).
 - Cache modes: set `SENTINEL_CACHE_MODE=hash` to validate cache hits by SHA-256 content hash (default `mtime` uses mtime+size).
+- Optional worker pool: set `SENTINEL_WORKERS=<n>` to offload scanning to worker threads. This can improve throughput on CPU-bound regex scans. The pool is ignored if the worker file isn’t built or when running tests.
 
 Example (PowerShell):
 
