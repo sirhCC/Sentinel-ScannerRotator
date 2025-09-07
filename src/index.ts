@@ -367,30 +367,63 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       if (idx >= files.length) break;
       const file = files[idx];
       const group = byFile.get(file)!;
-      for (const f of group) {
-        const doIt = await shouldApplyForFinding(f);
-        const res = await rotator.rotate(f, {
-          dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
-          template: opts.template,
-          verify: opts.verify,
-        });
-  m.rotations_total++;
-  if (res.success) m.rotations_success++; else m.rotations_failed++;
-        if (res.success) logger.info(res.message as string);
-        else logger.warn(res.message as string);
+      // If rotator supports batch, use it for a single write per file
+  const hasBatch = (r: any): r is { name: string; rotateFile: (filePath: string, findings: any[], options?: any) => Promise<any[]> } => typeof r?.rotateFile === 'function';
+  if (hasBatch(rotator)) {
+        const approvals: boolean[] = [];
+        for (const f of group) approvals.push(await shouldApplyForFinding(f));
+        const anyApprove = approvals.some(Boolean);
+        const dryRun = opts.dryRun || rotator.name === 'dry-run' || !anyApprove;
+  const results = await rotator.rotateFile(file, group, { dryRun, template: opts.template, verify: opts.verify });
+        // Treat as one rotation event for metrics/logging granularity
+        m.rotations_total++;
+        const ok = results.every((r: any) => r?.success);
+        if (ok) m.rotations_success++; else m.rotations_failed++;
+        const msg = results[0]?.message || (ok ? `Rotated ${group.length} findings in ${file}` : `Failed to rotate findings in ${file}`);
+        if (ok) logger.info(msg as string); else logger.warn(msg as string);
         if (auditor) {
-          await auditor.write({
-            ts: Date.now(),
-            file: f.filePath,
-            line: f.line,
-            column: f.column,
-            match: f.match,
-            rotator: rotator.name,
+          for (let i = 0; i < group.length; i++) {
+            const f = group[i];
+            await auditor.write({
+              ts: Date.now(),
+              file: f.filePath,
+              line: f.line,
+              column: f.column,
+              match: f.match,
+              rotator: rotator.name,
+              dryRun,
+              verify: opts.verify || false,
+              success: !!ok,
+              message: results[i]?.message,
+            });
+          }
+        }
+      } else {
+        for (const f of group) {
+          const doIt = await shouldApplyForFinding(f);
+          const res = await rotator.rotate(f, {
             dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
-            verify: opts.verify || false,
-            success: res.success,
-            message: res.message,
+            template: opts.template,
+            verify: opts.verify,
           });
+          m.rotations_total++;
+          if (res.success) m.rotations_success++; else m.rotations_failed++;
+          if (res.success) logger.info(res.message as string);
+          else logger.warn(res.message as string);
+          if (auditor) {
+            await auditor.write({
+              ts: Date.now(),
+              file: f.filePath,
+              line: f.line,
+              column: f.column,
+              match: f.match,
+              rotator: rotator.name,
+              dryRun: opts.dryRun || rotator.name === 'dry-run' || !doIt,
+              verify: opts.verify || false,
+              success: res.success,
+              message: res.message,
+            });
+          }
         }
       }
     }

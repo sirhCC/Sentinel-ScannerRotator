@@ -187,6 +187,62 @@ function buildRef(providerName: string, refSuffix: string) {
 
 export const backendRotator: Rotator = {
   name: 'backend',
+  async rotateFile(filePath, findings, options) {
+    if (!Array.isArray(findings) || !findings.length) return [];
+    const ts = Date.now();
+    const backendName = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
+    if (options?.dryRun) {
+      // Derive refs for each finding and preview a single-file replacement
+      return findings.map((f) => {
+        const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || `${path.basename(f.filePath)}_${f.line}_${ts}`;
+        const ref = `secretref://${backendName}/${key}`;
+        const placeholder = options?.template
+          ? options.template
+              .replace(/\{\{match\}\}/g, f.match)
+              .replace(/\{\{timestamp\}\}/g, String(ts))
+              .replace(/\{\{file\}\}/g, f.filePath)
+              .replace(/\{\{ref\}\}/g, ref)
+          : ref;
+        return { success: true, message: `Would store secret and replace with ${placeholder} in ${filePath}:${f.line}` };
+      });
+    }
+    const provider = await getProvider();
+    // Write secrets first; optionally verify; then replace in a single safe update
+    const records = [] as Array<{ raw: string; key: string; ref: string }>;
+    for (const f of findings) {
+      const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || genKey(f, ts);
+      const refSuffix = await provider.put(key, f.match);
+      if (options?.verify && provider.get) {
+        const readBack = await provider.get(key);
+        if (readBack !== f.match) {
+          try { await provider.delete?.(key); } catch {}
+          return [{ success: false, message: `Verification failed for ${provider.name}:${key}` }];
+        }
+      }
+      const ref = buildRef(provider.name, refSuffix);
+      records.push({ raw: f.match, key, ref });
+    }
+    // Perform one file write
+    const res = await safeUpdate(filePath, (content) => {
+      let out = content;
+      for (const r of records) {
+        const esc = r.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const placeholder = options?.template
+          ? options.template
+              .replace(/\{\{match\}\}/g, r.raw)
+              .replace(/\{\{timestamp\}\}/g, String(ts))
+              .replace(/\{\{file\}\}/g, filePath)
+              .replace(/\{\{ref\}\}/g, r.ref)
+          : r.ref;
+        out = out.replace(new RegExp(esc, 'g'), placeholder);
+      }
+      return out;
+    });
+    if (res.success) return [{ success: true, message: `Stored secret in ${provider.name} and replaced in ${filePath} (backup: ${res.backupPath})` }];
+    // Rollback all keys best-effort
+    for (const r of records) { try { await provider.delete?.(r.key); } catch {} }
+    return [{ success: false, message: `Failed to update file after storing secret(s): ${res.error}` }];
+  },
   async rotate(finding, options) {
     const ts = Date.now();
     const backendName = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
