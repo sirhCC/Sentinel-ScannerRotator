@@ -4,7 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: daily
-      time: "03:00"
+      time: "04:00"
       timezone: "UTC"
     open-pull-requests-limit: 10
     commit-message:
@@ -12,6 +12,15 @@ updates:
       include: "scope"
     labels:
       - dependencies
+      - automerge
+    reviewers:
+      - "sirhCC"
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "*"
         update-types:
@@ -21,10 +30,11 @@ updates:
     schedule:
       interval: weekly
       day: sunday
-      time: "03:00"
+  time: "04:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
     labels:
-      - dependencies
+  - dependencies
+  - automerge
     commit-message:
       prefix: "deps(actions)"
