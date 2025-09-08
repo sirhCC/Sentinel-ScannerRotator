@@ -114,6 +114,23 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       console.error(e?.message || String(e));
     }
   }
+  // Optional one-time startup context (JSON log only)
+  if (opts.logJson) {
+    const engine = (process.env.SENTINEL_REGEX_ENGINE || 'native').toLowerCase();
+    const workers = Number(process.env.SENTINEL_WORKERS || '0') || 0;
+    const cacheMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase();
+    const scanConcEnv = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
+    const rotateConcEnv = Number(process.env.SENTINEL_ROTATE_CONCURRENCY);
+    const scanConc = opts.scanConcurrency ?? (isNaN(scanConcEnv) ? undefined : scanConcEnv);
+    const rotateConc = opts.rotateConcurrency ?? (isNaN(rotateConcEnv) ? undefined : rotateConcEnv);
+    createLogger({ json: true, level: opts.logLevel || 'info' }).info('startup', {
+      engine,
+      workers,
+      cacheMode,
+      scanConcurrency: scanConc,
+      rotateConcurrency: rotateConc,
+    });
+  }
   // Apply ruleset-related options to env to keep lower layers simple
   if (typeof opts.disableBuiltinRules === 'boolean' && opts.disableBuiltinRules) {
     process.env.SENTINEL_DISABLE_BUILTIN_RULES = 'true';
