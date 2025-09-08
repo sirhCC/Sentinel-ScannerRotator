@@ -381,6 +381,10 @@ Expose Prometheus metrics and a simple health check over HTTP.
     - `sentinel_findings_total`
     - `sentinel_findings_severity_total{severity="low|medium|high"}`
     - `sentinel_rotations_total`, `sentinel_rotations_success_total`, `sentinel_rotations_failed_total`
+    - `sentinel_rules_compiled_total`
+    - `sentinel_files_skipped_total`
+    - `sentinel_files_skipped_reason_total{reason="..."}`
+    - `sentinel_runtime_info{engine=...,workers=...,cache_mode=...,scan_concurrency=...,rotate_concurrency=...,version=...} 1`
 
 You can still write metrics to a file at the end of the run with `--metrics <path>`.
 
