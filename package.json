@@ -8,8 +8,8 @@
     "build": "tsc -p .",
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
-    "test": "vitest run",
-    "lint": "eslint . --ext .ts",
+  "test": "vitest run",
+  "lint": "eslint src test --ext .ts",
     "format": "prettier --write .",
     "clean": "rimraf dist .sentinel_tmp tmp-demo tmp-try tmp-config.txt"
   },

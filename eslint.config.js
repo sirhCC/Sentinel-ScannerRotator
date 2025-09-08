@@ -2,7 +2,7 @@
 import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'examples/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'examples/**', '*.mjs', 'tmp-*.mjs', 'tmp-*/**', '.sentinel_tmp*/**'] },
 
   // Type-checked rules for source files only
   ...tseslint.config({
