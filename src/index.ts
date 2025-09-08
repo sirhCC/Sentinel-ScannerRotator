@@ -227,6 +227,13 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       baseDir = path.dirname(opts.config);
     }
   }
+  // Default baseDir to the target path so policy/rules discovery resolves relative to scanned tree
+  if (!baseDir) {
+    try {
+      const st = await fs.stat(target);
+      baseDir = st.isDirectory() ? target : path.dirname(target);
+    } catch {}
+  }
   const envScanConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
   const scanConc = (opts.scanConcurrency ?? (isNaN(envScanConc) ? undefined : envScanConc));
   const cachePath = opts.cache || process.env.SENTINEL_CACHE;
@@ -265,8 +272,22 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       const { loadPolicy } = await import('./policy.js');
       policy = await loadPolicy(baseDir);
     } catch {}
-    // Per-severity thresholds (only enforced if provided)
-    const sevCounts = findings.reduce((acc: Record<string, number>, f: any) => {
+    // Normalize and validate policy
+    const validSev = (s: any): 'low'|'medium'|'high'|undefined => {
+      const v = String(s || '').toLowerCase();
+      return v === 'low' || v === 'medium' || v === 'high' ? (v as any) : undefined;
+    };
+    const rank = { low: 1, medium: 2, high: 3 } as const;
+  const minSeverity: 'low'|'medium'|'high'|undefined = validSev(policy?.minSeverity);
+    if (policy?.minSeverity && !minSeverity) {
+      logger.warn(`Ignoring invalid policy.minSeverity=${JSON.stringify(policy.minSeverity)} (expected low|medium|high)`);
+    }
+    // Apply minSeverity as a filter for threshold counting
+    const considered = minSeverity
+      ? findings.filter((f: any) => rank[String((f.severity || 'medium')).toLowerCase() as 'low'|'medium'|'high'] >= rank[minSeverity])
+      : findings;
+    // Per-severity thresholds (only enforced if provided) computed on considered set
+    const sevCounts = considered.reduce((acc: Record<string, number>, f: any) => {
       const sev = (f.severity || 'medium').toLowerCase();
       acc[sev] = (acc[sev] || 0) + 1;
       return acc;
@@ -277,15 +298,6 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       if (hit) {
         logger.error(`Failing due to forbidden rule matched: ${hit.ruleName} in ${hit.filePath}:${hit.line}`);
         return 4;
-      }
-    }
-    // Minimum severity gate
-    if (policy?.minSeverity) {
-      const order = { low: 1, medium: 2, high: 3 } as Record<string, number>;
-      const minRank = order[String(policy.minSeverity).toLowerCase()] || 0;
-      const anyAtLeast = findings.some((f: any) => (order[String((f.severity || 'medium')).toLowerCase()] || 0) >= minRank);
-      if (anyAtLeast && minRank > 0) {
-        // continue to threshold checks; minSeverity is a filter gate not a direct fail
       }
     }
     const checkSev = (name: 'high'|'medium'|'low', thr: number | undefined) => {
@@ -319,8 +331,8 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       return 4;
     }
     const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : (policy?.thresholds?.total ?? 0);
-    if (findings.length > threshold) {
-      logger.error(`Failing due to findings (${findings.length}) exceeding threshold (${threshold}).`);
+    if (considered.length > threshold) {
+      logger.error(`Failing due to findings (${considered.length}) exceeding threshold (${threshold})` + (minSeverity ? ` (minSeverity=${minSeverity})` : ' ') + '.');
       if (opts.issues) {
         try {
           const { createIssues } = await import('./issues.js');
