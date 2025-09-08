@@ -399,6 +399,13 @@ Example JSON:
 }
 ```
 
+Semantics and precedence:
+
+- `minSeverity`: findings are filtered to only those at or above this severity before threshold checks. For example, `minSeverity: "medium"` excludes low severity findings from threshold counting.
+- Thresholds evaluation order: CLI flags have priority (e.g., `--fail-threshold`, `--fail-threshold-high|medium|low`), falling back to policy values, then defaults (total defaults to 0 when `--fail-on-findings` is used).
+- `forbidRules`: if any listed rule matches, the run fails immediately when `--fail-on-findings` is set.
+- Policy discovery is rooted at the scan target (or `--config` path if provided). This lets per-repo policies travel with the scanned project.
+
 CLI flags override the policy thresholds when provided.
 
 ## Development
