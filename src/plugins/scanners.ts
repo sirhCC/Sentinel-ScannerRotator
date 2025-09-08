@@ -52,8 +52,7 @@ async function loadMlHooks(spec: string): Promise<MlHooks> {
         else file = defAny as MlFileHook;
       }
       return { line, file } as MlHooks;
-    } catch (e) {
-      try { if (process.env.VITEST) console.warn('ML loader failed to import hook', { spec, error: e instanceof Error ? (e.stack || e.message) : JSON.stringify(e) }); } catch {}
+  } catch {
       return {} as MlHooks;
     }
   })();
