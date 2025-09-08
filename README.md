@@ -70,6 +70,7 @@ Key options:
 - `--metrics-server` | `--metrics-port <n>`: serve Prometheus metrics over HTTP (see Metrics section)
 - `--disable-builtin-rules`: disable built-in rule set
 - `--metrics <path>`: write Prometheus metrics at end of run
+- `--show-runtime-info`: print current runtime configuration (engine, workers, cache mode, concurrency, version) and exit
 - `--issues` and `--issues-file <path>`: create issues (file provider) when failing on findings
   
 Subcommands:
@@ -387,6 +388,16 @@ Expose Prometheus metrics and a simple health check over HTTP.
     - `sentinel_runtime_info{engine=...,workers=...,cache_mode=...,scan_concurrency=...,rotate_concurrency=...,version=...} 1`
 
 You can still write metrics to a file at the end of the run with `--metrics <path>`.
+
+Prometheus examples:
+
+```bash
+# List current runtime configurations
+sentinel_runtime_info
+
+# Group by engine and worker count
+sum by (engine, workers) (sentinel_runtime_info)
+```
 
 ### Policy (optional)
 
