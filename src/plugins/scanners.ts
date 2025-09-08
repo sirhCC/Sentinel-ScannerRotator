@@ -7,7 +7,7 @@ import tar from 'tar-stream';
 import zlib from 'zlib';
 import readline from 'readline';
 import { Finding, ScanResult } from '../types.js';
-import { loadRules } from '../rules/ruleset.js';
+import { loadRules, type Rule } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
 
 export type ScannerPlugin = {
@@ -38,10 +38,6 @@ async function getMlHook(): Promise<MlHook | undefined> {
   return mlHook;
 }
 
-async function loadSecretRegexes(baseDir?: string) {
-  const rules = await loadRules(baseDir);
-  return rules;
-}
 
 // Optional RE2 engine support with safe fallback to native RegExp
 type RegexCtor = new (pattern: string, flags?: string) => RegExp;
@@ -74,12 +70,36 @@ async function compileRuleSet(rules: Array<{ re: RegExp; name: string; severity:
   });
 }
 
+// Per-run cache of compiled rule sets to avoid reloading/compiling per file
+type CompiledSet = { raw: Rule[]; compiled: Array<{ s: Rule; re: RegExp }> };
+const compiledCache = new Map<string, Promise<CompiledSet>>();
+function rulesCacheKey(baseDir?: string): string {
+  const engine = (process.env.SENTINEL_REGEX_ENGINE || 'native').toLowerCase();
+  const b = baseDir ? path.resolve(baseDir) : '';
+  // Include env toggles that affect rule selection in the key to be safe across runs
+  const disable = (process.env.SENTINEL_DISABLE_BUILTIN_RULES || '').toLowerCase();
+  const rs = process.env.SENTINEL_RULESETS || '';
+  const rsd = process.env.SENTINEL_RULESETS_DIRS || '';
+  return [engine, b, disable, rs, rsd].join('|');
+}
+async function getCompiledRules(baseDir?: string): Promise<CompiledSet> {
+  const key = rulesCacheKey(baseDir);
+  const existing = compiledCache.get(key);
+  if (existing) return existing;
+  const p = (async () => {
+    const raw = await loadRules(baseDir);
+    const compiled = await compileRuleSet(raw);
+    return { raw, compiled } as CompiledSet;
+  })();
+  compiledCache.set(key, p);
+  return p;
+}
+
 export const textScanner: ScannerPlugin = {
   name: 'text',
   supports: () => true, // fallback for regular files
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-  const COMPILED = await compileRuleSet(SECRET_REGEXES);
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
     const hasher = hashMode ? (await import('crypto')).createHash('sha256') : undefined;
@@ -142,8 +162,7 @@ export const envScanner: ScannerPlugin = {
     return b === '.env' || b.startsWith('.env.') || b.endsWith('.env');
   },
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-    const COMPILED = SECRET_REGEXES.map(s => ({ s, re: new RegExp(s.re.source, s.re.flags) }));
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
   const findings: Finding[] = [];
   const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
   const hasher = hashMode ? await import('crypto').then(m => m.createHash('sha256')) : undefined;
@@ -210,8 +229,7 @@ export const dockerScanner: ScannerPlugin = {
     return b === 'Dockerfile' || l.startsWith('dockerfile.') || l.endsWith('.dockerfile');
   },
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-  const COMPILED = await compileRuleSet(SECRET_REGEXES);
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
   const findings: Finding[] = [];
   const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
   const hasher = hashMode ? await import('crypto').then(m => m.createHash('sha256')) : undefined;
@@ -282,7 +300,7 @@ export const binaryScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const allow = (process.env.SENTINEL_SCAN_BINARIES ?? 'false').toLowerCase();
     if (!(allow === 'true' || allow === '1' || allow === 'yes')) return { findings: [] };
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
     try {
       const buf = await fs.readFile(filePath);
       // Guardrails
@@ -301,8 +319,7 @@ export const binaryScanner: ScannerPlugin = {
       // Naive decode: try utf8; for failures, replace invalids
       const text = buf.toString('utf8');
       const findings: Finding[] = [];
-      const lines = text.split(/\r?\n/);
-      const COMPILED = await compileRuleSet(SECRET_REGEXES);
+  const lines = text.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         for (const { s, re } of COMPILED) {
@@ -336,8 +353,7 @@ export const zipScanner: ScannerPlugin = {
     const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
     const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update(buf).digest('hex') : undefined;
     const zip = await JSZip.loadAsync(buf);
-  const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-  const COMPILED = await compileRuleSet(SECRET_REGEXES);
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_ZIP_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_ZIP_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
@@ -410,8 +426,7 @@ export const tarGzScanner: ScannerPlugin = {
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
     const allowArchives = (process.env.SENTINEL_SCAN_ARCHIVES ?? 'true').toLowerCase();
     if (allowArchives === 'false' || allowArchives === '0' || allowArchives === 'no') return { findings: [] } as any;
-    const SECRET_REGEXES = await loadSecretRegexes(baseDir ?? path.dirname(filePath));
-    const COMPILED = await compileRuleSet(SECRET_REGEXES);
+  const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const maxEntries = Number(process.env.SENTINEL_TAR_MAX_ENTRIES || '1000');
     const maxEntryBytes = Number(process.env.SENTINEL_TAR_MAX_ENTRY_BYTES || '1048576'); // 1 MiB
