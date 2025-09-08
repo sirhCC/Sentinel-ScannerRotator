@@ -39,6 +39,28 @@ async function getMlHook(): Promise<MlHook | undefined> {
   return mlHook;
 }
 
+// Helper to call the ML hook with a time budget and metrics
+async function callMlHook(hook: MlHook, line: string, ctx: { filePath: string; lineNumber: number }): Promise<MlToken[] | undefined> {
+  const budget = Number(process.env.SENTINEL_ML_MAX_MS || '0'); // 0 = no timeout
+  const start = Date.now();
+  const g = globalThis as any;
+  try { if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_invocations_total++; } catch {}
+  try {
+    const p = Promise.resolve(hook(line, ctx));
+    const res = budget > 0 ? await Promise.race<MlToken[] | undefined>([
+      p,
+      new Promise<MlToken[] | undefined>((resolve) => setTimeout(() => resolve(undefined), budget)),
+    ]) : await p;
+    const dur = Date.now() - start;
+    try { g.__sentinelMetrics.ml_time_ms_total += dur; } catch {}
+    return res;
+  } catch {
+    const dur = Date.now() - start;
+    try { g.__sentinelMetrics.ml_errors_total++; g.__sentinelMetrics.ml_time_ms_total += dur; } catch {}
+    return undefined;
+  }
+}
+
 
 // Optional RE2 engine support with safe fallback to native RegExp
 type RegexCtor = new (pattern: string, flags?: string) => RegExp;
@@ -158,14 +180,13 @@ export const textScanner: ScannerPlugin = {
         }
       }
       if (hook) {
-        try {
-          const tokens = await hook(line, { filePath, lineNumber: lineNo });
-          if (tokens && Array.isArray(tokens)) {
-            for (const t of tokens) {
-              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
-            }
+        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+        if (tokens && Array.isArray(tokens)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
+          for (const t of tokens) {
+            findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
           }
-        } catch {}
+        }
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -248,14 +269,13 @@ export const envScanner: ScannerPlugin = {
         findings.push({ filePath, line: lineNo, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
       }
       if (hook) {
-        try {
-          const tokens = await hook(line, { filePath, lineNumber: lineNo });
-          if (tokens && Array.isArray(tokens)) {
-            for (const t of tokens) {
-              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
-            }
+        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+        if (tokens && Array.isArray(tokens)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
+          for (const t of tokens) {
+            findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
           }
-        } catch {}
+        }
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -334,14 +354,13 @@ export const dockerScanner: ScannerPlugin = {
         findings.push({ filePath, line: lineNo, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
       }
       if (hook) {
-        try {
-          const tokens = await hook(line, { filePath, lineNumber: lineNo });
-          if (tokens && Array.isArray(tokens)) {
-            for (const t of tokens) {
-              findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
-            }
+        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+        if (tokens && Array.isArray(tokens)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
+          for (const t of tokens) {
+            findings.push({ filePath, line: lineNo, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
           }
-        } catch {}
+        }
       }
       if (enableEntropy) {
         const hits = findHighEntropyTokens(line);
@@ -587,13 +606,13 @@ export const tarGzScanner: ScannerPlugin = {
                 });
               }
             }
-            // ML hook for archives
-            // Note: getMlHook() returns cached hook once loaded
+            // ML hook for archives (best-effort; async without blocking stream)
             void getMlHook().then((hook) => {
               if (!hook) return;
-              Promise.resolve(hook(line, { filePath: `${filePath}:${header.name}`, lineNumber: i + 1 }))
+              callMlHook(hook, line, { filePath: `${filePath}:${header.name}`, lineNumber: i + 1 })
                 .then((tokens) => {
                   if (tokens && Array.isArray(tokens)) {
+                    try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
                     for (const t of tokens) {
                       findings.push({ filePath: `${filePath}:${header.name}`, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
                     }
