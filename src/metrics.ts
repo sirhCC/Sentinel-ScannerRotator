@@ -7,6 +7,17 @@ export type Metrics = {
   rotations_total: number;
   rotations_success: number;
   rotations_failed: number;
+  rules_compiled_total: number;
+  files_skipped_total: number;
+  files_skipped_by_reason: Record<string, number>;
+  runtime_info?: {
+    engine?: string;
+    workers?: number;
+    cacheMode?: string;
+    scanConcurrency?: number | undefined;
+    rotateConcurrency?: number | undefined;
+    version?: string;
+  };
 };
 
 export function newMetrics(): Metrics {
@@ -16,11 +27,30 @@ export function newMetrics(): Metrics {
     rotations_total: 0,
     rotations_success: 0,
     rotations_failed: 0,
+  rules_compiled_total: 0,
+  files_skipped_total: 0,
+  files_skipped_by_reason: {},
   };
 }
 
 export async function writeProm(metrics: Metrics, filePath: string) {
   const lines: string[] = [];
+  // Static runtime info (labels) emitted as a gauge value 1
+  if (metrics.runtime_info) {
+    const ri = metrics.runtime_info;
+    const esc = (v: any) => String(v ?? '').replace(/"/g, '\\"');
+    const labels = [
+      `engine="${esc(ri.engine)}"`,
+      `workers="${esc(ri.workers)}"`,
+      `cache_mode="${esc(ri.cacheMode)}"`,
+      `scan_concurrency="${esc(ri.scanConcurrency)}"`,
+      `rotate_concurrency="${esc(ri.rotateConcurrency)}"`,
+      `version="${esc(ri.version)}"`,
+    ].join(',');
+    lines.push('# HELP sentinel_runtime_info Sentinel runtime configuration info');
+    lines.push('# TYPE sentinel_runtime_info gauge');
+    lines.push(`sentinel_runtime_info{${labels}} 1`);
+  }
   lines.push('# HELP sentinel_findings_total Total findings detected');
   lines.push('# TYPE sentinel_findings_total counter');
   lines.push(`sentinel_findings_total ${metrics.findings_total}`);
@@ -38,6 +68,17 @@ export async function writeProm(metrics: Metrics, filePath: string) {
   lines.push('# HELP sentinel_rotations_failed_total Rotations failed');
   lines.push('# TYPE sentinel_rotations_failed_total counter');
   lines.push(`sentinel_rotations_failed_total ${metrics.rotations_failed}`);
+  lines.push('# HELP sentinel_rules_compiled_total Rules compiled (per run)');
+  lines.push('# TYPE sentinel_rules_compiled_total counter');
+  lines.push(`sentinel_rules_compiled_total ${metrics.rules_compiled_total}`);
+  lines.push('# HELP sentinel_files_skipped_total Files skipped');
+  lines.push('# TYPE sentinel_files_skipped_total counter');
+  lines.push(`sentinel_files_skipped_total ${metrics.files_skipped_total}`);
+  lines.push('# HELP sentinel_files_skipped_reason_total Files skipped by reason');
+  lines.push('# TYPE sentinel_files_skipped_reason_total counter');
+  for (const [reason, n] of Object.entries(metrics.files_skipped_by_reason)) {
+    lines.push(`sentinel_files_skipped_reason_total{reason="${reason}"} ${n}`);
+  }
   const out = lines.join('\n') + '\n';
   try { await fs.mkdir(path.dirname(filePath), { recursive: true }); } catch {}
   await fs.writeFile(filePath, out, 'utf8');
