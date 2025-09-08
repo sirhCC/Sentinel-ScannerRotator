@@ -65,6 +65,7 @@ Key options:
 - `--cache <path>`: persist scan cache to a file (or use SENTINEL_CACHE)
 - `--fail-on-findings` and `--fail-threshold <n>`: fail fast for CI if findings exceed threshold (skips rotation)
 - `--fail-threshold-high|--fail-threshold-medium|--fail-threshold-low <n>`: with `--fail-on-findings`, fail if per-severity counts exceed N
+- `--min-severity <low|medium|high>`: only count findings at or above this severity when evaluating thresholds
 - `--list-rulesets` | `--rulesets <names>` | `--rulesets-dirs <dirs>`: curated rulesets features
 - `--metrics-server` | `--metrics-port <n>`: serve Prometheus metrics over HTTP (see Metrics section)
 - `--disable-builtin-rules`: disable built-in rule set
@@ -402,6 +403,7 @@ Example JSON:
 Semantics and precedence:
 
 - `minSeverity`: findings are filtered to only those at or above this severity before threshold checks. For example, `minSeverity: "medium"` excludes low severity findings from threshold counting.
+  - You can override this via CLI: `--min-severity <low|medium|high>`.
 - Thresholds evaluation order: CLI flags have priority (e.g., `--fail-threshold`, `--fail-threshold-high|medium|low`), falling back to policy values, then defaults (total defaults to 0 when `--fail-on-findings` is used).
 - `forbidRules`: if any listed rule matches, the run fails immediately when `--fail-on-findings` is set.
 - Policy discovery is rooted at the scan target (or `--config` path if provided). This lets per-repo policies travel with the scanned project.
