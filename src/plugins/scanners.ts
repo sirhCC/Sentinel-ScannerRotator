@@ -99,6 +99,17 @@ export const textScanner: ScannerPlugin = {
   name: 'text',
   supports: () => true, // fallback for regular files
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
+  // Early skip: empty files
+  try {
+    const st = await fs.stat(filePath);
+    if (st.size === 0) {
+      const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+      const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update('').digest('hex') : undefined;
+      return { findings: [], computedHash };
+    }
+    const fileMax = Number(process.env.SENTINEL_TEXT_FILE_MAX_BYTES || '0');
+    if (fileMax > 0 && st.size > fileMax) return { findings: [] };
+  } catch {}
   const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
     const findings: Finding[] = [];
     const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
@@ -162,6 +173,17 @@ export const envScanner: ScannerPlugin = {
     return b === '.env' || b.startsWith('.env.') || b.endsWith('.env');
   },
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
+  // Early skip: empty files
+  try {
+    const st = await fs.stat(filePath);
+    if (st.size === 0) {
+      const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+      const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update('').digest('hex') : undefined;
+      return { findings: [], computedHash };
+    }
+    const fileMax = Number(process.env.SENTINEL_TEXT_FILE_MAX_BYTES || '0');
+    if (fileMax > 0 && st.size > fileMax) return { findings: [] };
+  } catch {}
   const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
   const findings: Finding[] = [];
   const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
@@ -229,6 +251,17 @@ export const dockerScanner: ScannerPlugin = {
     return b === 'Dockerfile' || l.startsWith('dockerfile.') || l.endsWith('.dockerfile');
   },
   async scan(filePath: string, baseDir?: string): Promise<ScanResult> {
+  // Early skip: empty files
+  try {
+    const st = await fs.stat(filePath);
+    if (st.size === 0) {
+      const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
+      const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update('').digest('hex') : undefined;
+      return { findings: [], computedHash };
+    }
+    const fileMax = Number(process.env.SENTINEL_TEXT_FILE_MAX_BYTES || '0');
+    if (fileMax > 0 && st.size > fileMax) return { findings: [] };
+  } catch {}
   const { compiled: COMPILED } = await getCompiledRules(baseDir ?? path.dirname(filePath));
   const findings: Finding[] = [];
   const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
