@@ -21,6 +21,21 @@ export function startMetricsServer(metrics: Metrics, opts?: { port?: number }): 
         if (req.url.startsWith('/metrics')) {
           // Minimal shim: expose metrics via direct writer
           const lines: string[] = [];
+          if (metrics.runtime_info) {
+            const ri = metrics.runtime_info;
+            const esc = (v: any) => String(v ?? '').replace(/"/g, '\\"');
+            const labels = [
+              `engine="${esc(ri.engine)}"`,
+              `workers="${esc(ri.workers)}"`,
+              `cache_mode="${esc(ri.cacheMode)}"`,
+              `scan_concurrency="${esc(ri.scanConcurrency)}"`,
+              `rotate_concurrency="${esc(ri.rotateConcurrency)}"`,
+              `version="${esc(ri.version)}"`,
+            ].join(',');
+            lines.push('# HELP sentinel_runtime_info Sentinel runtime configuration info');
+            lines.push('# TYPE sentinel_runtime_info gauge');
+            lines.push(`sentinel_runtime_info{${labels}} 1`);
+          }
           lines.push('# HELP sentinel_findings_total Total findings detected');
           lines.push('# TYPE sentinel_findings_total counter');
           lines.push(`sentinel_findings_total ${metrics.findings_total}`);
@@ -38,6 +53,17 @@ export function startMetricsServer(metrics: Metrics, opts?: { port?: number }): 
           lines.push('# HELP sentinel_rotations_failed_total Rotations failed');
           lines.push('# TYPE sentinel_rotations_failed_total counter');
           lines.push(`sentinel_rotations_failed_total ${metrics.rotations_failed}`);
+          lines.push('# HELP sentinel_rules_compiled_total Rules compiled (per run)');
+          lines.push('# TYPE sentinel_rules_compiled_total counter');
+          lines.push(`sentinel_rules_compiled_total ${metrics.rules_compiled_total}`);
+          lines.push('# HELP sentinel_files_skipped_total Files skipped');
+          lines.push('# TYPE sentinel_files_skipped_total counter');
+          lines.push(`sentinel_files_skipped_total ${metrics.files_skipped_total}`);
+          lines.push('# HELP sentinel_files_skipped_reason_total Files skipped by reason');
+          lines.push('# TYPE sentinel_files_skipped_reason_total counter');
+          for (const [reason, n] of Object.entries(metrics.files_skipped_by_reason)) {
+            lines.push(`sentinel_files_skipped_reason_total{reason="${reason}"} ${n}`);
+          }
           const body = lines.join('\n') + '\n';
           res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
           res.end(body);
