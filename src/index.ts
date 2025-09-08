@@ -75,6 +75,7 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
   .option('--metrics <path>', 'write Prometheus-format metrics to file at end of run')
   .option('--metrics-server', 'serve Prometheus metrics over HTTP (default port 9095)', false)
   .option('--metrics-port <n>', 'port for --metrics-server', (v) => parseInt(v, 10))
+  .option('--show-runtime-info', 'print runtime config (engine, workers, cache, concurrency, version) and exit', false)
   .option('--fail-on-findings', 'exit non-zero if any findings are found (skips rotation)', false)
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
   .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
@@ -127,6 +128,19 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
     rotateConcurrency: rotateConcOpt,
     version,
   };
+  if (opts.showRuntimeInfo) {
+    if (opts.logJson) console.log(JSON.stringify({ runtime: m.runtime_info }));
+    else {
+      console.log(`Engine: ${engine}`);
+      console.log(`Workers: ${workerCount}`);
+      console.log(`Cache mode: ${cacheMode}`);
+      console.log(`Scan concurrency: ${scanConcOpt ?? ''}`);
+      console.log(`Rotate concurrency: ${rotateConcOpt ?? ''}`);
+      console.log(`Version: ${version ?? ''}`);
+    }
+    // Graceful stop of metrics server not needed since we exit here
+    return 0;
+  }
   if (opts.metricsServer) {
     try {
       const { startMetricsServer } = await import('./server.js');
