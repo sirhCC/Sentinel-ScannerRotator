@@ -366,6 +366,8 @@ sentinel --rulesets-catalog .\catalog.json --rulesets-install common \
 
 - Provide `SENTINEL_ML_HOOK` path or spec to a module exporting `analyzeLine(line, {filePath, lineNumber})` returning tokens.
 - Findings from ML are tagged as `ML-Hook` unless `ruleName` is set.
+- Optional timeout: `SENTINEL_ML_MAX_MS` caps per-call time; when exceeded, the call is skipped.
+  - Metrics: `sentinel_ml_invocations_total`, `sentinel_ml_time_ms_total`, `sentinel_ml_errors_total`, `sentinel_ml_findings_total`.
 
 ### Binary scanning (optional)
 
