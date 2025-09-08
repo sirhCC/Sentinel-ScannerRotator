@@ -79,7 +79,8 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
   .option('--fail-threshold <n>', 'exit non-zero if findings exceed N (with --fail-on-findings)', (v) => parseInt(v, 10))
   .option('--fail-threshold-high <n>', 'with --fail-on-findings: fail if HIGH severity findings exceed N', (v) => parseInt(v, 10))
   .option('--fail-threshold-medium <n>', 'with --fail-on-findings: fail if MEDIUM severity findings exceed N', (v) => parseInt(v, 10))
-  .option('--fail-threshold-low <n>', 'with --fail-on-findings: fail if LOW severity findings exceed N', (v) => parseInt(v, 10));
+  .option('--fail-threshold-low <n>', 'with --fail-on-findings: fail if LOW severity findings exceed N', (v) => parseInt(v, 10))
+  .option('--min-severity <sev>', 'minimum severity for threshold counting (low|medium|high)');
 
   // Add version from package.json if available
   try {
@@ -278,8 +279,12 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
       return v === 'low' || v === 'medium' || v === 'high' ? (v as any) : undefined;
     };
     const rank = { low: 1, medium: 2, high: 3 } as const;
-  const minSeverity: 'low'|'medium'|'high'|undefined = validSev(policy?.minSeverity);
-    if (policy?.minSeverity && !minSeverity) {
+    const cliMin = validSev((opts as any).minSeverity);
+    if ((opts as any).minSeverity && !cliMin) {
+      logger.warn(`Ignoring invalid --min-severity=${JSON.stringify((opts as any).minSeverity)} (expected low|medium|high)`);
+    }
+    const minSeverity: 'low'|'medium'|'high'|undefined = cliMin ?? validSev(policy?.minSeverity);
+    if (!cliMin && policy?.minSeverity && !minSeverity) {
       logger.warn(`Ignoring invalid policy.minSeverity=${JSON.stringify(policy.minSeverity)} (expected low|medium|high)`);
     }
     // Apply minSeverity as a filter for threshold counting
@@ -300,11 +305,11 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
         return 4;
       }
     }
-    const checkSev = (name: 'high'|'medium'|'low', thr: number | undefined) => {
+  const checkSev = (name: 'high'|'medium'|'low', thr: number | undefined) => {
       if (!Number.isFinite(thr)) return false;
       const n = sevCounts[name] || 0;
       if (n > (thr as number)) {
-        logger.error(`Failing due to ${name.toUpperCase()} severity findings (${n}) exceeding threshold (${thr}).`);
+    logger.error(`Failing due to ${name.toUpperCase()} severity findings (${n}) exceeding threshold (${thr}).`, minSeverity ? { minSeverity } : undefined);
         return true;
       }
       return false;
@@ -332,7 +337,7 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
     }
     const threshold: number = Number.isFinite(opts.failThreshold) ? opts.failThreshold : (policy?.thresholds?.total ?? 0);
     if (considered.length > threshold) {
-      logger.error(`Failing due to findings (${considered.length}) exceeding threshold (${threshold})` + (minSeverity ? ` (minSeverity=${minSeverity})` : ' ') + '.');
+      logger.error(`Failing due to findings (${considered.length}) exceeding threshold (${threshold}).`, minSeverity ? { minSeverity } : undefined);
       if (opts.issues) {
         try {
           const { createIssues } = await import('./issues.js');
