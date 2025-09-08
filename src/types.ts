@@ -6,6 +6,10 @@ export type Finding = {
   context?: string;
   ruleName?: string;
   severity?: 'low' | 'medium' | 'high';
+  // ML enrichment (optional)
+  confidence?: number; // 0..1
+  tags?: string[];
+  message?: string;
 };
 
 // Optional richer result for scanners that can compute a file hash while scanning
