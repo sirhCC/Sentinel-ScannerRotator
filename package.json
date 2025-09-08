@@ -1,6 +1,6 @@
 {
   "name": "secret-sentinel-scanner-rotator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small TypeScript CLI that scans files for secret-like patterns and supports pluggable rotators (dry-run/apply).",
   "main": "dist/index.js",
   "type": "module",
