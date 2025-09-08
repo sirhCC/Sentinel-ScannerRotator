@@ -18,35 +18,81 @@ export type ScannerPlugin = {
 };
 
 type MlToken = { token: string; index: number; ruleName?: string; severity?: 'low'|'medium'|'high' };
-type MlHook = (line: string, ctx: { filePath: string; lineNumber: number }) => Promise<MlToken[] | undefined> | MlToken[] | undefined;
-let mlHook: MlHook | undefined;
-let mlTried = false;
-async function getMlHook(): Promise<MlHook | undefined> {
-  if (mlTried) return mlHook;
-  mlTried = true;
-  const spec = (process.env.SENTINEL_ML_HOOK || '').trim();
-  if (!spec) return undefined;
-  try {
-    const toImport = path.isAbsolute(spec) ? pathToFileURL(spec).href : spec;
-    const mod: any = await import(toImport);
-    const fn: any = mod?.analyzeLine || mod?.default;
-    if (typeof fn === 'function') {
-      mlHook = fn as MlHook;
+type MlLineHook = (line: string, ctx: { filePath: string; lineNumber: number }) => Promise<MlToken[] | undefined> | MlToken[] | undefined;
+type MlFileHook = (lines: string[], ctx: { filePath: string }) => Promise<MlToken[] | undefined> | MlToken[] | undefined;
+type MlHooks = { line?: MlLineHook; file?: MlFileHook };
+const mlCache = new Map<string, Promise<MlHooks>>();
+function getMlSpec(): string { return (process.env.SENTINEL_ML_HOOK || '').trim(); }
+async function loadMlHooks(spec: string): Promise<MlHooks> {
+  if (!spec) return {};
+  const existing = mlCache.get(spec);
+  if (existing) return existing;
+  const p = (async () => {
+    try {
+      let toImportUrl = path.isAbsolute(spec) ? pathToFileURL(spec).href : spec;
+      if (path.isAbsolute(spec)) {
+        try {
+          const st = fsSync.statSync(spec);
+      const u = new URL(toImportUrl);
+          u.searchParams.set('v', String(st.mtimeMs));
+      toImportUrl = u.href;
+        } catch {}
+      }
+    const mod: any = await import(toImportUrl);
+      let line: MlLineHook | undefined;
+      let file: MlFileHook | undefined;
+  if (typeof mod?.analyzeLine === 'function') line = mod.analyzeLine as MlLineHook;
+  if (typeof mod?.analyzeFile === 'function') file = mod.analyzeFile as MlFileHook;
+  // Also support modules that default-export an object with analyzeLine/analyzeFile
+  if (!line && typeof mod?.default?.analyzeLine === 'function') line = mod.default.analyzeLine as MlLineHook;
+  if (!file && typeof mod?.default?.analyzeFile === 'function') file = mod.default.analyzeFile as MlFileHook;
+      if (!line && !file && typeof mod?.default === 'function') {
+        const defAny: any = mod.default;
+        if ((defAny?.length ?? 0) >= 2) line = defAny as MlLineHook;
+        else file = defAny as MlFileHook;
+      }
+      return { line, file } as MlHooks;
+    } catch (e) {
+      try { if (process.env.VITEST) console.warn('ML loader failed to import hook', { spec, error: e instanceof Error ? (e.stack || e.message) : JSON.stringify(e) }); } catch {}
+      return {} as MlHooks;
     }
-  } catch {
-    // ignore errors
-  }
-  return mlHook;
+  })();
+  mlCache.set(spec, p);
+  return p;
+}
+function getMlMode(): 'line' | 'file' | 'both' {
+  const m = (process.env.SENTINEL_ML_MODE || 'line').toLowerCase();
+  return (m === 'file' || m === 'both') ? (m as any) : 'line';
 }
 
 // Helper to call the ML hook with a time budget and metrics
-async function callMlHook(hook: MlHook, line: string, ctx: { filePath: string; lineNumber: number }): Promise<MlToken[] | undefined> {
+async function callMlHook(hook: MlLineHook, line: string, ctx: { filePath: string; lineNumber: number }): Promise<MlToken[] | undefined> {
   const budget = Number(process.env.SENTINEL_ML_MAX_MS || '0'); // 0 = no timeout
   const start = Date.now();
   const g = globalThis as any;
   try { if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_invocations_total++; } catch {}
   try {
     const p = Promise.resolve(hook(line, ctx));
+    const res = budget > 0 ? await Promise.race<MlToken[] | undefined>([
+      p,
+      new Promise<MlToken[] | undefined>((resolve) => setTimeout(() => resolve(undefined), budget)),
+    ]) : await p;
+    const dur = Date.now() - start;
+    try { g.__sentinelMetrics.ml_time_ms_total += dur; } catch {}
+    return res;
+  } catch {
+    const dur = Date.now() - start;
+    try { g.__sentinelMetrics.ml_errors_total++; g.__sentinelMetrics.ml_time_ms_total += dur; } catch {}
+    return undefined;
+  }
+}
+async function callMlFileHook(hook: MlFileHook, lines: string[], ctx: { filePath: string }): Promise<MlToken[] | undefined> {
+  const budget = Number(process.env.SENTINEL_ML_MAX_MS || '0');
+  const start = Date.now();
+  const g = globalThis as any;
+  try { if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_invocations_total++; } catch {}
+  try {
+    const p = Promise.resolve(hook(lines, ctx));
     const res = budget > 0 ? await Promise.race<MlToken[] | undefined>([
       p,
       new Promise<MlToken[] | undefined>((resolve) => setTimeout(() => resolve(undefined), budget)),
@@ -146,7 +192,9 @@ export const textScanner: ScannerPlugin = {
     const hasher = hashMode ? (await import('crypto')).createHash('sha256') : undefined;
     const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
     const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
-    const hook = await getMlHook();
+  const mode = getMlMode();
+  const mlSpec = getMlSpec();
+  const hooks = mlSpec ? await loadMlHooks(mlSpec) : {};
     const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0'); // 0 = unlimited
     const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
     let readBytes = 0;
@@ -179,8 +227,8 @@ export const textScanner: ScannerPlugin = {
           findings.push({ filePath, line: lineNo, column: m.index + 1, match: m[0], context: line.trim().slice(0, 200), ruleName: s.name, severity: s.severity });
         }
       }
-      if (hook) {
-        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+  if (hooks.line && (mode === 'line' || mode === 'both')) {
+        const tokens = await callMlHook(hooks.line, line, { filePath, lineNumber: lineNo });
         if (tokens && Array.isArray(tokens)) {
           try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
           for (const t of tokens) {
@@ -194,6 +242,20 @@ export const textScanner: ScannerPlugin = {
           findings.push({ filePath, line: lineNo, column: h.index + 1, match: h.token, context: line.trim().slice(0, 200), ruleName: 'High-Entropy Token', severity: 'medium' });
         }
       }
+    }
+    // Optional file-level ML hook
+  if (hooks.file && (mode === 'file' || mode === 'both' || !hooks.line)) {
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const linesArr = content.split(/\r?\n/);
+        const toks = await callMlFileHook(hooks.file, linesArr, { filePath });
+        if (Array.isArray(toks)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += toks.length; } catch {}
+          for (const t of toks) {
+            findings.push({ filePath, line: 1, column: t.index + 1, match: t.token, context: (linesArr[0] || '').trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+          }
+        }
+      } catch {}
     }
     const computedHash = hasher ? hasher.digest('hex') : undefined;
     return { findings, computedHash };
@@ -229,7 +291,9 @@ export const envScanner: ScannerPlugin = {
     // built-in regexes
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
-  const hook = await getMlHook();
+  const mode = getMlMode();
+  const mlSpec = getMlSpec();
+  const hooks = mlSpec ? await loadMlHooks(mlSpec) : {};
     const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0');
     const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
     let readBytes = 0;
@@ -268,8 +332,8 @@ export const envScanner: ScannerPlugin = {
       if (mm && sensitiveKeyRegex().test(mm[1]) && (mm[2].length >= 12)) {
         findings.push({ filePath, line: lineNo, column: line.indexOf(mm[2]) + 1, match: mm[2], context: line.trim().slice(0, 200) });
       }
-      if (hook) {
-        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+  if (hooks.line && (mode === 'line' || mode === 'both')) {
+        const tokens = await callMlHook(hooks.line, line, { filePath, lineNumber: lineNo });
         if (tokens && Array.isArray(tokens)) {
           try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
           for (const t of tokens) {
@@ -284,6 +348,19 @@ export const envScanner: ScannerPlugin = {
         }
       }
     }
+  if (hooks.file && (mode === 'file' || mode === 'both' || !hooks.line)) {
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const linesArr = content.split(/\r?\n/);
+        const toks = await callMlFileHook(hooks.file, linesArr, { filePath });
+        if (Array.isArray(toks)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += toks.length; } catch {}
+          for (const t of toks) {
+            findings.push({ filePath, line: 1, column: t.index + 1, match: t.token, context: (linesArr[0] || '').trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+          }
+        }
+  } catch {}
+  }
   const computedHash = hasher ? hasher.digest('hex') : undefined;
   return { findings, computedHash };
   },
@@ -314,7 +391,9 @@ export const dockerScanner: ScannerPlugin = {
   const hasher = hashMode ? await import('crypto').then(m => m.createHash('sha256')) : undefined;
   const useEntropy = (process.env.SENTINEL_ENTROPY ?? 'false').toLowerCase();
   const enableEntropy = (useEntropy === 'true' || useEntropy === '1' || useEntropy === 'yes');
-  const hook = await getMlHook();
+  const mode = getMlMode();
+  const mlSpec = getMlSpec();
+  const hooks = mlSpec ? await loadMlHooks(mlSpec) : {};
     const maxBytes = Number(process.env.SENTINEL_TEXT_MAX_BYTES || '0');
     const rs = fsSync.createReadStream(filePath, { encoding: 'utf8' });
     let readBytes = 0;
@@ -353,8 +432,8 @@ export const dockerScanner: ScannerPlugin = {
         const value = mm[3];
         findings.push({ filePath, line: lineNo, column: line.indexOf(value) + 1, match: value, context: line.trim().slice(0, 200) });
       }
-      if (hook) {
-        const tokens = await callMlHook(hook, line, { filePath, lineNumber: lineNo });
+  if (hooks.line && (mode === 'line' || mode === 'both')) {
+        const tokens = await callMlHook(hooks.line, line, { filePath, lineNumber: lineNo });
         if (tokens && Array.isArray(tokens)) {
           try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
           for (const t of tokens) {
@@ -369,6 +448,19 @@ export const dockerScanner: ScannerPlugin = {
         }
       }
     }
+  if (hooks.file && (mode === 'file' || mode === 'both' || !hooks.line)) {
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        const linesArr = content.split(/\r?\n/);
+        const toks = await callMlFileHook(hooks.file, linesArr, { filePath });
+        if (Array.isArray(toks)) {
+          try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += toks.length; } catch {}
+          for (const t of toks) {
+            findings.push({ filePath, line: 1, column: t.index + 1, match: t.token, context: (linesArr[0] || '').trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
+          }
+        }
+  } catch {}
+  }
   const computedHash = hasher ? hasher.digest('hex') : undefined;
   return { findings, computedHash };
   },
@@ -462,7 +554,8 @@ export const zipScanner: ScannerPlugin = {
     let totalBytes = 0;
     type ZipEntry = { dir?: boolean; name: string; async: (t: 'string') => Promise<string> };
     const entries = Object.values(zip.files) as unknown as ZipEntry[];
-  const hook = await getMlHook();
+  const mlSpec = getMlSpec();
+  const hooks = mlSpec ? await loadMlHooks(mlSpec) : {};
   for (const entry of entries) {
       if (count++ >= maxEntries) break;
       if (entry.dir) continue;
@@ -506,9 +599,9 @@ export const zipScanner: ScannerPlugin = {
             });
           }
         }
-        if (hook) {
+        if (hooks.line) {
           try {
-            const tokens = await hook(line, { filePath: `${filePath}:${entry.name}`, lineNumber: i + 1 });
+            const tokens = await callMlHook(hooks.line, line, { filePath: `${filePath}:${entry.name}`, lineNumber: i + 1 });
             if (tokens && Array.isArray(tokens)) {
               for (const t of tokens) {
                 findings.push({ filePath: `${filePath}:${entry.name}`, line: i + 1, column: t.index + 1, match: t.token, context: line.trim().slice(0, 200), ruleName: t.ruleName || 'ML-Hook', severity: t.severity || 'medium' });
@@ -607,9 +700,10 @@ export const tarGzScanner: ScannerPlugin = {
               }
             }
             // ML hook for archives (best-effort; async without blocking stream)
-            void getMlHook().then((hook) => {
-              if (!hook) return;
-              callMlHook(hook, line, { filePath: `${filePath}:${header.name}`, lineNumber: i + 1 })
+            const mlSpec = getMlSpec();
+            void loadMlHooks(mlSpec).then(hooks => {
+              if (!hooks.line) return;
+              callMlHook(hooks.line, line, { filePath: `${filePath}:${header.name}`, lineNumber: i + 1 })
                 .then((tokens) => {
                   if (tokens && Array.isArray(tokens)) {
                     try { const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics(); g.__sentinelMetrics.ml_findings_total += tokens.length; } catch {}
@@ -619,7 +713,7 @@ export const tarGzScanner: ScannerPlugin = {
                   }
                 })
                 .catch(() => {});
-            });
+            }).catch(() => {});
           }
           next();
         });
