@@ -106,6 +106,27 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
   const m = newMetrics();
   // Optional HTTP metrics server
   let srv: any;
+  // Prepare runtime info (engine/workers/etc.) for metrics and startup log
+  const engine = (process.env.SENTINEL_REGEX_ENGINE || 'native').toLowerCase();
+  const workerCount = Number(process.env.SENTINEL_WORKERS || '0') || 0;
+  const cacheMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase();
+  const scanConcEnv = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
+  const rotateConcEnv = Number(process.env.SENTINEL_ROTATE_CONCURRENCY);
+  const scanConcOpt = opts.scanConcurrency ?? (isNaN(scanConcEnv) ? undefined : scanConcEnv);
+  const rotateConcOpt = opts.rotateConcurrency ?? (isNaN(rotateConcEnv) ? undefined : rotateConcEnv);
+  let version: string | undefined;
+  try {
+    const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    version = pkg?.version;
+  } catch {}
+  m.runtime_info = {
+    engine,
+  workers: workerCount,
+    cacheMode,
+    scanConcurrency: scanConcOpt,
+    rotateConcurrency: rotateConcOpt,
+    version,
+  };
   if (opts.metricsServer) {
     try {
       const { startMetricsServer } = await import('./server.js');
@@ -116,19 +137,12 @@ export async function runCli(argsIn: string[], envOverride?: Record<string, stri
   }
   // Optional one-time startup context (JSON log only)
   if (opts.logJson) {
-    const engine = (process.env.SENTINEL_REGEX_ENGINE || 'native').toLowerCase();
-    const workers = Number(process.env.SENTINEL_WORKERS || '0') || 0;
-    const cacheMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase();
-    const scanConcEnv = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
-    const rotateConcEnv = Number(process.env.SENTINEL_ROTATE_CONCURRENCY);
-    const scanConc = opts.scanConcurrency ?? (isNaN(scanConcEnv) ? undefined : scanConcEnv);
-    const rotateConc = opts.rotateConcurrency ?? (isNaN(rotateConcEnv) ? undefined : rotateConcEnv);
     createLogger({ json: true, level: opts.logLevel || 'info' }).info('startup', {
-      engine,
-      workers,
+  engine,
+  workers: workerCount,
       cacheMode,
-      scanConcurrency: scanConc,
-      rotateConcurrency: rotateConc,
+      scanConcurrency: scanConcOpt,
+      rotateConcurrency: rotateConcOpt,
     });
   }
   // Apply ruleset-related options to env to keep lower layers simple
