@@ -7,6 +7,7 @@ import tar from 'tar-stream';
 import zlib from 'zlib';
 import readline from 'readline';
 import { Finding, ScanResult } from '../types.js';
+import { newMetrics } from '../metrics.js';
 import { loadRules, type Rule } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
 
@@ -61,6 +62,13 @@ async function getRegexCtor(): Promise<RegexCtor> {
 
 async function compileRuleSet(rules: Array<{ re: RegExp; name: string; severity: any }>) {
   const Ctor = await getRegexCtor();
+  // Bump metric (best-effort; create an ad-hoc metrics object if none exists)
+  try {
+    // In absence of global registry, we rely on a global instance if present
+    const g = globalThis as any;
+    if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+    g.__sentinelMetrics.rules_compiled_total += rules.length;
+  } catch {}
   return rules.map((s) => {
     try {
       return { s, re: new Ctor(s.re.source, s.re.flags) };
@@ -129,10 +137,19 @@ export const textScanner: ScannerPlugin = {
       });
     }
     const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
     let lineNo = 0;
     for await (const line of rl) {
       lineNo++;
       if (hasher) hasher.update(line + '\n');
+      if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+        try {
+          const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+          g.__sentinelMetrics.files_skipped_total++;
+          g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+        } catch {}
+        continue;
+      }
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
@@ -204,10 +221,19 @@ export const envScanner: ScannerPlugin = {
       });
     }
     const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
     let lineNo = 0;
     for await (const line of rl) {
   lineNo++;
   if (hasher) hasher.update(line + '\n');
+      if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+        try {
+          const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+          g.__sentinelMetrics.files_skipped_total++;
+          g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+        } catch {}
+        continue;
+      }
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
@@ -281,10 +307,19 @@ export const dockerScanner: ScannerPlugin = {
       });
     }
     const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
+    const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
     let lineNo = 0;
     for await (const line of rl) {
   lineNo++;
   if (hasher) hasher.update(line + '\n');
+      if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+        try {
+          const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+          g.__sentinelMetrics.files_skipped_total++;
+          g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+        } catch {}
+        continue;
+      }
       for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
@@ -352,9 +387,18 @@ export const binaryScanner: ScannerPlugin = {
       // Naive decode: try utf8; for failures, replace invalids
       const text = buf.toString('utf8');
       const findings: Finding[] = [];
-  const lines = text.split(/\r?\n/);
+      const lines = text.split(/\r?\n/);
+      const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+          try {
+            const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+            g.__sentinelMetrics.files_skipped_total++;
+            g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+          } catch {}
+          continue;
+        }
         for (const { s, re } of COMPILED) {
           let m: RegExpExecArray | null;
           while ((m = re.exec(line)) !== null) {
@@ -417,8 +461,17 @@ export const zipScanner: ScannerPlugin = {
   totalBytes += bytes;
   g.__sentinelArchiveBytes += bytes;
       const lines = content.split(/\r?\n/);
+      const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
   for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+    if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+      try {
+        const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+        g.__sentinelMetrics.files_skipped_total++;
+        g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+      } catch {}
+      continue;
+    }
     for (const { s, re } of COMPILED) {
           let m: RegExpExecArray | null;
           re.lastIndex = 0;
@@ -508,8 +561,17 @@ export const tarGzScanner: ScannerPlugin = {
           g.__sentinelArchiveBytes = (g.__sentinelArchiveBytes as number) + entryBytes;
           const content = Buffer.concat(parts).toString('utf8');
           const lines = content.split(/\r?\n/);
+          const maxLine = Number(process.env.SENTINEL_TEXT_LINE_MAX_BYTES || '0');
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
+            if (maxLine > 0 && Buffer.byteLength(line, 'utf8') > maxLine) {
+              try {
+                const g = globalThis as any; if (!g.__sentinelMetrics) g.__sentinelMetrics = newMetrics();
+                g.__sentinelMetrics.files_skipped_total++;
+                g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] = (g.__sentinelMetrics.files_skipped_by_reason['line-too-long'] || 0) + 1;
+              } catch {}
+              continue;
+            }
   for (const { s, re } of COMPILED) {
         let m: RegExpExecArray | null;
         re.lastIndex = 0;
