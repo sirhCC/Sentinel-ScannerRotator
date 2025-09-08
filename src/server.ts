@@ -64,6 +64,18 @@ export function startMetricsServer(metrics: Metrics, opts?: { port?: number }): 
           for (const [reason, n] of Object.entries(metrics.files_skipped_by_reason)) {
             lines.push(`sentinel_files_skipped_reason_total{reason="${reason}"} ${n}`);
           }
+          lines.push('# HELP sentinel_ml_findings_total Findings produced by ML hook');
+          lines.push('# TYPE sentinel_ml_findings_total counter');
+          lines.push(`sentinel_ml_findings_total ${metrics.ml_findings_total}`);
+          lines.push('# HELP sentinel_ml_invocations_total ML hook invocations');
+          lines.push('# TYPE sentinel_ml_invocations_total counter');
+          lines.push(`sentinel_ml_invocations_total ${metrics.ml_invocations_total}`);
+          lines.push('# HELP sentinel_ml_errors_total ML hook errors');
+          lines.push('# TYPE sentinel_ml_errors_total counter');
+          lines.push(`sentinel_ml_errors_total ${metrics.ml_errors_total}`);
+          lines.push('# HELP sentinel_ml_time_ms_total Total time spent in ML hook (ms)');
+          lines.push('# TYPE sentinel_ml_time_ms_total counter');
+          lines.push(`sentinel_ml_time_ms_total ${metrics.ml_time_ms_total}`);
           const body = lines.join('\n') + '\n';
           res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
           res.end(body);
