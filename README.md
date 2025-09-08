@@ -369,6 +369,12 @@ sentinel --rulesets-catalog .\catalog.json --rulesets-install common \
 - Optional timeout: `SENTINEL_ML_MAX_MS` caps per-call time; when exceeded, the call is skipped.
   - Metrics: `sentinel_ml_invocations_total`, `sentinel_ml_time_ms_total`, `sentinel_ml_errors_total`, `sentinel_ml_findings_total`.
 
+File-level analysis:
+
+- You can also export `analyzeFile(lines: string[], {filePath})` for whole-file heuristics (e.g., multi-line key blocks).
+- Choose ML mode via `SENTINEL_ML_MODE`: `line` (default), `file`, or `both`.
+- Example module: `examples/ml/simple.mjs` shows both functions.
+
 ### Binary scanning (optional)
 
 - Enable with `SENTINEL_SCAN_BINARIES=true`; scans small binary files (<= 2 MiB) by decoding to UTF-8 and applying rules.
