@@ -6,6 +6,11 @@
 - Safe usage guidelines
 - Backends and secret handling
 - Audit logging
+- Security hardening features
+  - Rate limiting
+  - Input validation
+  - Secret masking
+  - Audit log verification
 - Temporary files and backups
 - Data handling and logging
 - Least privilege and operational posture
@@ -58,6 +63,68 @@ The `--audit <path>` option writes NDJSON logs that include details such as file
 - Do not commit audit artifacts to source control.
 
 Integrity: Audit events include a SHA-256 hash of the payload and an optional HMAC-SHA256 signature when `SENTINEL_AUDIT_SIGN_KEY` is set (with optional `SENTINEL_AUDIT_SIGN_KEY_ID`). Treat signed logs as sensitive; protect keys.
+
+## Security hardening features
+
+### Rate limiting
+
+The metrics server (`--metrics-server`) implements token bucket rate limiting to prevent DoS attacks:
+
+- Default: 100 requests per minute per client IP
+- Returns HTTP 429 (Too Many Requests) when limit exceeded
+- Includes `Retry-After` header indicating wait time
+- Automatic cleanup of stale rate limit buckets every 5 minutes
+
+### Input validation
+
+Input validation utilities protect against common attack vectors:
+
+- **Path traversal**: Validates file paths to prevent `../` directory escapes and null bytes
+- **SSRF protection**: URL validation restricts private IP access in production environments
+- **ReDoS prevention**: Regex pattern validation detects nested quantifiers that could cause catastrophic backtracking
+- **Injection protection**: Sanitizes log output by removing control characters
+- **Range validation**: Integer inputs are validated for type and min/max bounds
+- **Format validation**: Environment variable names, secret keys, and HMAC keys are validated for correct format and strength
+
+### Secret masking
+
+Error messages and logs automatically mask common secret patterns:
+
+- AWS access keys (AKIA...)
+- GitHub tokens (ghp_..., ghs_...)
+- JSON Web Tokens (eyJ...)
+- Generic long alphanumeric strings (20+ characters)
+- Masked values replaced with `***REDACTED***`
+- Stack traces are also masked to prevent secret exposure
+
+### Audit log verification
+
+Audit logs can be verified for integrity and replay attacks using the `verifyAuditLog` utility:
+
+- **Tamper detection**: SHA-256 hashes are recalculated and compared to detect modifications
+- **Replay detection**: Tracks seen hashes to identify duplicate events
+- **Signature verification**: HMAC-SHA256 signatures validate log authenticity when signing key is provided
+- **Timestamp ordering**: Optional chronological order validation
+- **Detailed reporting**: Identifies specific line numbers and error types for investigation
+
+Example verification:
+
+```javascript
+import { verifyAuditLog } from './src/auditVerify.js';
+
+const result = await verifyAuditLog('audit.ndjson', {
+  signKey: process.env.SENTINEL_AUDIT_SIGN_KEY,
+  checkTimestamps: true,
+  allowDuplicates: false
+});
+
+if (!result.valid) {
+  console.error('Audit log verification failed:');
+  result.errors.forEach(err => 
+    console.error(`Line ${err.line}: ${err.type} - ${err.message}`)
+  );
+}
+```
 
 ## Temporary files and backups
 
