@@ -10,7 +10,7 @@
 
 _A production-grade CLI tool for scanning repositories to detect secrets and safely rotating them through pluggable backends._
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Configuration](#%EF%B8%8F-configuration) • [Security](#-security)
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Configuration](#%EF%B8%8F-configuration) • [API Reference](./API.md) • [Contributing](./CONTRIBUTING.md)
 
 </div>
 
@@ -1039,10 +1039,25 @@ MIT License - see [LICENSE](./LICENSE) for details
 
 ## 📚 Additional Resources
 
-- **Security Policy**: [SECURITY.md](./SECURITY.md)
-- **Changelog**: [CHANGELOG.md](./CHANGELOG.md)
-- **Priority Tasks**: [PRIORITY_TASKS.md](./PRIORITY_TASKS.md)
-- **Examples**: `examples/` directory
+### Documentation
+
+- **API Reference**: [API.md](./API.md) - Complete API documentation for plugin authors
+- **Migration Guide**: [MIGRATION.md](./MIGRATION.md) - Version migration guides
+- **Contributing**: [CONTRIBUTING.md](./CONTRIBUTING.md) - How to contribute to the project
+- **Changelog**: [CHANGELOG.md](./CHANGELOG.md) - Version history and release notes
+
+### Security & Support
+
+- **Security Policy**: [SECURITY.md](./SECURITY.md) - Reporting security vulnerabilities
+- **Publishing Guide**: [PUBLISHING.md](./PUBLISHING.md) - Release and publishing process
+
+### Development
+
+- **Priority Tasks**: [PRIORITY_TASKS.md](./PRIORITY_TASKS.md) - Development roadmap
+- **Examples**: `examples/` directory - Working code examples
+  - `examples/rotators/` - Custom rotator examples
+  - `examples/ml/` - ML integration examples
+  - `examples/nbext/` - Jupyter Notebook extension
 
 ---
 
