@@ -1,5 +1,6 @@
 import http from 'http';
 import { Metrics } from './metrics.js';
+import { RateLimiter } from './rateLimit.js';
 
 export type ServerHandle = {
   server: http.Server;
@@ -12,9 +13,31 @@ export function startMetricsServer(
   opts?: { port?: number },
 ): Promise<ServerHandle> {
   const port = opts?.port ?? 9095;
+  
+  // Rate limiting: 100 requests per minute per IP
+  const rateLimiter = new RateLimiter({
+    tokensPerInterval: 100,
+    interval: 60000, // 60 seconds
+    maxTokens: 100,
+  });
+
+  // Cleanup stale buckets every 5 minutes
+  const cleanupInterval = setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000);
+
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       try {
+        // Apply rate limiting (extract IP from socket)
+        const clientIp = req.socket.remoteAddress || 'unknown';
+        if (!rateLimiter.tryConsume(clientIp)) {
+          res.writeHead(429, { 
+            'Content-Type': 'text/plain',
+            'Retry-After': '60'
+          });
+          res.end('Rate limit exceeded. Try again later.');
+          return;
+        }
+
         if (!req.url) {
           res.end();
           return;
@@ -103,7 +126,10 @@ export function startMetricsServer(
       resolve({
         server,
         port: p,
-        close: () => new Promise<void>((res) => server.close(() => res())),
+        close: () => new Promise<void>((res) => {
+          clearInterval(cleanupInterval);
+          server.close(() => res());
+        }),
       });
     });
   });
