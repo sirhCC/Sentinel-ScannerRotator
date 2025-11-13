@@ -1,0 +1,98 @@
+name: Container Security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'src/**'
+      - 'package*.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+  schedule:
+    # Weekly scan every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: sentinel-scanner:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: sentinel-scanner:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy in table format
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: sentinel-scanner:${{ github.sha }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-unfixed: true
+
+      - name: Scan for secrets in image layers
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: sentinel-scanner:${{ github.sha }}
+          scanners: 'secret'
+          format: 'table'
+
+      - name: Test container
+        run: |
+          docker run --rm sentinel-scanner:${{ github.sha }} --version
+          docker run --rm sentinel-scanner:${{ github.sha }} --help
+
+      - name: Check container health
+        run: |
+          # Start container with metrics server
+          docker run -d --name test-sentinel \
+            -p 9095:9095 \
+            sentinel-scanner:${{ github.sha }} \
+            scan /app --dry-run --metrics-server
+
+          # Wait for startup
+          sleep 5
+
+          # Check health endpoint
+          curl -f http://localhost:9095/healthz || exit 1
+
+          # Cleanup
+          docker stop test-sentinel
+          docker rm test-sentinel

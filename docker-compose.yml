@@ -1,0 +1,109 @@
+services:
+  sentinel-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sentinel-scanner:latest
+    container_name: sentinel-scanner
+    volumes:
+      # Mount workspace to scan
+      - ./:/workspace:ro
+      # Persistent cache
+      - sentinel-cache:/app/data
+      # Config overrides
+      - ./config:/app/config:ro
+    environment:
+      # Scanning options
+      - SENTINEL_CACHE=/app/data/cache.json
+      - SENTINEL_LOG_LEVEL=info
+      # Backend configuration (file provider)
+      - SENTINEL_BACKEND=file
+      - SENTINEL_BACKEND_FILE=/app/data/secrets.json
+      # Concurrency settings
+      - SENTINEL_SCAN_CONCURRENCY=8
+      - SENTINEL_ROTATE_CONCURRENCY=4
+      # Feature flags
+      - SENTINEL_ENTROPY=false
+      - SENTINEL_SCAN_BINARIES=false
+    command: ['scan', '/workspace', '--dry-run']
+    user: '1001:1001'
+
+  # Metrics server for monitoring
+  sentinel-metrics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sentinel-scanner:latest
+    container_name: sentinel-metrics
+    ports:
+      - '9095:9095'
+    volumes:
+      - ./:/workspace:ro
+      - sentinel-cache:/app/data
+    environment:
+      - SENTINEL_CACHE=/app/data/cache.json
+      - SENTINEL_LOG_LEVEL=info
+    command: ['scan', '/workspace', '--dry-run', '--metrics-server', '--metrics-port', '9095']
+    user: '1001:1001'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9095/healthz']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # AWS Secrets Manager backend example
+  sentinel-aws:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sentinel-scanner:latest
+    container_name: sentinel-aws
+    volumes:
+      - ./:/workspace
+      - ~/.aws:/home/sentinel/.aws:ro
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - SENTINEL_BACKEND=aws
+      - SENTINEL_BACKEND_PREFIX=sentinel/
+      - SENTINEL_CACHE=/app/data/cache.json
+    command: ['scan', '/workspace', '--rotator', 'backend', '--dry-run']
+    user: '1001:1001'
+
+  # Vault backend example
+  sentinel-vault:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sentinel-scanner:latest
+    container_name: sentinel-vault
+    volumes:
+      - ./:/workspace
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN}
+      - VAULT_NAMESPACE=${VAULT_NAMESPACE:-}
+      - SENTINEL_BACKEND=vault
+      - SENTINEL_BACKEND_PREFIX=secret/data/sentinel/
+      - SENTINEL_CACHE=/app/data/cache.json
+    command: ['scan', '/workspace', '--rotator', 'backend', '--verify', '--dry-run']
+    user: '1001:1001'
+    depends_on:
+      - vault
+
+  # HashiCorp Vault for development
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault-dev
+    ports:
+      - '8200:8200'
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=dev-token
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+
+volumes:
+  sentinel-cache:
+    driver: local

@@ -44,7 +44,17 @@
     "postinstall": "node scripts/verify-install.js || exit 0",
     "version": "npm run format && git add -A",
     "postversion": "git push && git push --tags",
-    "pack:test": "npm pack && echo '\nTest installation with: npm install -g ./secret-sentinel-scanner-rotator-*.tgz'"
+    "pack:test": "npm pack && echo '\nTest installation with: npm install -g ./secret-sentinel-scanner-rotator-*.tgz'",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "keywords": [
     "secret",
@@ -71,6 +81,8 @@
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
     "rimraf": "^5.0.0",
     "ts-node": "^10.9.1",
