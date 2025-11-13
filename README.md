@@ -82,8 +82,9 @@ Environment options:
 - `SENTINEL_ENTROPY`: enable high-entropy token detection (`true`/`1`/`yes`).
 - `SENTINEL_ENTROPY_THRESHOLD`: entropy threshold in bits/char (default 3.5)
 - `SENTINEL_ENTROPY_MINLEN`: minimum token length to consider (default 32)
-- `SENTINEL_REGEX_ENGINE`: optional regex engine; `native` (default) or `re2`. When set to `re2` and the `re2` package is available, patterns compile with RE2 for safer backtracking. If `re2` isn’t installed or a specific pattern isn’t supported, the scanner falls back to native `RegExp` per rule.
+- `SENTINEL_REGEX_ENGINE`: optional regex engine; `native` (default) or `re2`. When set to `re2` and the `re2` package is available, patterns compile with RE2 for safer backtracking. If `re2` isn't installed or a specific pattern isn't supported, the scanner falls back to native `RegExp` per rule.
 - `SENTINEL_WORKERS`: optional worker pool size for scanning with worker_threads (e.g., `4`). Disabled during tests by default. Requires built artifacts (`npm run build`) so the pool can load `dist/worker/scanWorker.js`.
+- `SENTINEL_DEBUG`: enable debug logging (`true`). When enabled, logs detailed error information to stderr for troubleshooting issues with file scanning, cache operations, config loading, and ML hooks.
 
 Exit codes: 0 success; 2 unknown rotator; 3 unsafe apply invocation; 4 failed due to findings (with --fail-on-findings).
 

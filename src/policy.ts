@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { createRequire } from 'module';
 
 export type Policy = {
   thresholds?: { total?: number; high?: number; medium?: number; low?: number };
@@ -20,8 +21,8 @@ export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> 
       const c = await fs.readFile(rootYaml, 'utf8');
       let mod: any = null;
       try {
-        const req = eval('require');
-        mod = req('js-yaml');
+        const require = createRequire(import.meta.url);
+        mod = require('js-yaml');
       } catch {}
       if (mod && typeof mod.load === 'function') {
         const parsed = mod.load(c) as RawConfig;
@@ -38,8 +39,10 @@ export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> 
       const parsed = JSON.parse(c) as RawConfig;
       if (parsed && parsed.policy) return parsed.policy;
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    if (process.env.SENTINEL_DEBUG === 'true') {
+      console.error('[DEBUG] Failed to load policy:', err);
+    }
   }
   return undefined;
 }

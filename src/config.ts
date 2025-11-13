@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { createRequire } from 'module';
 // use dynamic import for js-yaml to avoid static type resolution failures when
 // the package's types are not installed in the environment.
 
@@ -17,8 +18,8 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       // avoid static import so tsc doesn't require the module to be present
       let mod: any = null;
       try {
-        const req = eval('require');
-        mod = req('js-yaml');
+        const require = createRequire(import.meta.url);
+        mod = require('js-yaml');
       } catch {
         // module not installed at runtime; treat as no config
       }
@@ -37,8 +38,10 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       const parsed = JSON.parse(content);
       return parsed.patterns || [];
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    if (process.env.SENTINEL_DEBUG === 'true') {
+      console.error('[DEBUG] Failed to load patterns:', err);
+    }
   }
   return [];
 }

@@ -62,7 +62,10 @@ async function loadMlHooks(spec: string): Promise<MlHooks> {
         else file = defAny as MlFileHook;
       }
       return { line, file } as MlHooks;
-  } catch {
+  } catch (err) {
+      if (process.env.SENTINEL_DEBUG === 'true') {
+        console.error('[DEBUG] Failed to load ML hook from', spec, err);
+      }
       return {} as MlHooks;
     }
   })();
@@ -549,7 +552,10 @@ export const binaryScanner: ScannerPlugin = {
       const hashMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase() === 'hash';
       const computedHash = hashMode ? (await import('crypto')).createHash('sha256').update(buf).digest('hex') : undefined;
       return { findings, computedHash };
-    } catch {
+    } catch (err) {
+      if (process.env.SENTINEL_DEBUG === 'true') {
+        console.error('[DEBUG] Binary scanner error:', filePath, err);
+      }
       return { findings: [] };
     }
   },

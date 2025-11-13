@@ -83,7 +83,9 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
                   out.push(...ce.findings);
                   servedFromCache = true;
                 }
-              } catch {}
+              } catch {
+                // Cache hash computation failed, will scan file normally
+              }
             } else {
               out.push(...ce.findings);
               servedFromCache = true;
@@ -101,7 +103,9 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
               } else {
                 hash = r.computedHash ?? (await (async () => { const buf = await fs.readFile(file); return crypto.createHash('sha256').update(buf).digest('hex'); })());
               }
-            } catch {}
+            } catch {
+              // Hash computation failed, cache entry will use mtime/size only
+            }
           }
           cache.entries[key] = { mtimeMs: st.mtimeMs, size: st.size, findings: r.findings, hash };
           continue;
@@ -109,8 +113,11 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
         // no cache
         const r = pool ? await pool.scan(file, baseDir) : await scanFileWithHash(file, baseDir);
         out.push(...r.findings);
-      } catch {
-        // ignore
+      } catch (err) {
+        // File scan failed, skip this file and continue
+        if (process.env.SENTINEL_DEBUG === 'true') {
+          console.error('[DEBUG] Failed to scan file:', file, err);
+        }
       }
     }
   }
@@ -121,7 +128,11 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
     for (const k of Object.keys(cache.entries)) {
       if (!scannedKeys.has(k)) delete cache.entries[k];
     }
-    try { await saveCache(cachePath, cache); } catch {}
+    try { await saveCache(cachePath, cache); } catch (err) {
+      if (process.env.SENTINEL_DEBUG === 'true') {
+        console.error('[DEBUG] Failed to save cache:', err);
+      }
+    }
   }
   return out;
 }
