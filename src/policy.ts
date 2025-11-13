@@ -1,14 +1,38 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createRequire } from 'module';
+import { z } from 'zod';
 
-export type Policy = {
-  thresholds?: { total?: number; high?: number; medium?: number; low?: number };
-  forbidRules?: string[];
-  minSeverity?: 'low' | 'medium' | 'high';
-};
+// Zod schema for policy validation
+const PolicySchema = z.object({
+  thresholds: z.object({
+    total: z.number().int().nonnegative().optional(),
+    high: z.number().int().nonnegative().optional(),
+    medium: z.number().int().nonnegative().optional(),
+    low: z.number().int().nonnegative().optional(),
+  }).optional(),
+  forbidRules: z.array(z.string().min(1)).optional(),
+  minSeverity: z.enum(['low', 'medium', 'high']).optional(),
+});
 
-type RawConfig = { policy?: Policy };
+export type Policy = z.infer<typeof PolicySchema>;
+
+type RawConfig = { policy?: unknown };
+
+function validatePolicy(data: unknown): Policy {
+  try {
+    return PolicySchema.parse(data);
+  } catch (err) {
+    if (process.env.SENTINEL_DEBUG === 'true') {
+      console.error('[DEBUG] Policy validation failed:', err);
+    }
+    if (err instanceof z.ZodError) {
+      const issues = err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+      throw new Error(`Invalid policy configuration: ${issues}`);
+    }
+    throw err;
+  }
+}
 
 export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> {
   const cwd = baseDir || process.cwd();
@@ -26,20 +50,30 @@ export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> 
       } catch {}
       if (mod && typeof mod.load === 'function') {
         const parsed = mod.load(c) as RawConfig;
-        if (parsed && parsed.policy) return parsed.policy;
+        if (parsed && parsed.policy) {
+          return validatePolicy(parsed.policy);
+        }
       }
     }
     if (await exists(rootJson)) {
       const c = await fs.readFile(rootJson, 'utf8');
       const parsed = JSON.parse(c) as RawConfig;
-      if (parsed && parsed.policy) return parsed.policy;
+      if (parsed && parsed.policy) {
+        return validatePolicy(parsed.policy);
+      }
     }
     if (await exists(defaults)) {
       const c = await fs.readFile(defaults, 'utf8');
       const parsed = JSON.parse(c) as RawConfig;
-      if (parsed && parsed.policy) return parsed.policy;
+      if (parsed && parsed.policy) {
+        return validatePolicy(parsed.policy);
+      }
     }
   } catch (err) {
+    // Re-throw validation errors so they're not silently swallowed
+    if (err instanceof Error && err.message.includes('Invalid policy configuration')) {
+      throw err;
+    }
     if (process.env.SENTINEL_DEBUG === 'true') {
       console.error('[DEBUG] Failed to load policy:', err);
     }

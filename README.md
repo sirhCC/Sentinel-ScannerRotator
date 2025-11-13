@@ -222,9 +222,18 @@ patterns:
     regex: MYAPI_[A-Z0-9]{16}
 ```
 
+Configuration validation:
+
+- Patterns are validated using Zod schemas at load time
+- **Pattern name**: must be non-empty string
+- **Regex**: must be a valid JavaScript regular expression
+- **Severity**: must be `low`, `medium`, or `high` (if specified)
+- **Enabled**: must be boolean (if specified)
+- Invalid configurations will throw errors with specific validation messages
+
 Notes:
 
-- If `js-yaml` isn’t installed, YAML parsing is skipped; JSON/defaults are used.
+- If `js-yaml` isn't installed, YAML parsing is skipped; JSON/defaults are used.
 - `--config <path>` can point at a file or directory; if a file, its directory is used as the base for lookup.
 
 ## Ignore rules
@@ -423,6 +432,13 @@ Example JSON:
   }
 }
 ```
+
+Policy validation:
+
+- **Thresholds**: must be non-negative integers (if specified)
+- **ForbidRules**: must be array of non-empty strings (if specified)
+- **MinSeverity**: must be `low`, `medium`, or `high` (if specified)
+- Invalid policies will throw errors with specific validation messages
 
 Semantics and precedence:
 
