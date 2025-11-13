@@ -115,11 +115,20 @@ describe('incremental scanning', () => {
     // Small delay to ensure filesystem/git sees the file
     await new Promise((resolve) => setTimeout(resolve, 100));
 
+    // Debug: Check git status before scan
+    const { getChangedFiles } = await import('../src/gitIntegration.js');
+    const gitDiff = await getChangedFiles({ repoPath: tmpDir });
+    console.log('[TEST] Git changed files:', gitDiff.changedFiles);
+    console.log('[TEST] Is git repo:', gitDiff.isGitRepo);
+
     // Second scan: should detect new file
     const findings2 = await scanPath(tmpDir, [], tmpDir, {
       cachePath,
       incremental: true,
     });
+
+    console.log('[TEST] findings2.length:', findings2.length);
+    console.log('[TEST] findings2:', findings2);
 
     expect(findings2.length).toBeGreaterThan(0);
     expect(findings2.some((f) => f.filePath.includes('file2.txt'))).toBe(true);
