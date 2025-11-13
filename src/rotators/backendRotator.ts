@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { Rotator, Finding } from '../types.js';
 import { safeUpdate } from '../fileSafeUpdate.js';
+import { withRetry, maskError } from '../errorHandling.js';
 
 type Provider = {
   name: string;
@@ -85,26 +86,73 @@ async function awsProvider(): Promise<Provider> {
     const mod: any = await import(awsSdkModule);
     const { SecretsManagerClient, CreateSecretCommand, PutSecretValueCommand } = mod;
     const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-    const client = new SecretsManagerClient({ region });
+    
+    // Try to create client - will fail if credentials not configured
+    let client: any;
+    try {
+      client = new SecretsManagerClient({ region });
+    } catch (clientError) {
+      throw new Error(
+        `Failed to initialize AWS Secrets Manager client. Check AWS credentials and region configuration: ${(clientError as Error).message}`,
+      );
+    }
     return {
       name: 'aws',
       async put(key: string, value: string) {
         // create or update secret named key (optionally with prefix)
         const prefix = process.env.SENTINEL_BACKEND_PREFIX || '';
         const name = prefix ? `${prefix}${key}` : key;
-        try {
-          await client.send(new CreateSecretCommand({ Name: name, SecretString: value }));
-        } catch {
-          // If already exists, update value
-          await client.send(new PutSecretValueCommand({ SecretId: name, SecretString: value }));
-        }
-        return name; // return secret name as ref suffix
+
+        return withRetry(
+          async () => {
+            try {
+              await client.send(new CreateSecretCommand({ Name: name, SecretString: value }));
+            } catch (createError: any) {
+              // If already exists, update value
+              if (
+                createError.name === 'ResourceExistsException' ||
+                createError.name === 'InvalidRequestException'
+              ) {
+                await client.send(
+                  new PutSecretValueCommand({ SecretId: name, SecretString: value }),
+                );
+              } else {
+                throw createError;
+              }
+            }
+            return name; // return secret name as ref suffix
+          },
+          {
+            maxRetries: 3,
+            initialDelayMs: 1000,
+            retryableErrors: [
+              'ThrottlingException',
+              'ServiceUnavailable',
+              'InternalServiceError',
+              'NetworkingError',
+              'ECONNRESET',
+              'ETIMEDOUT',
+            ],
+            onRetry: (error, attempt) => {
+              console.warn(`AWS retry ${attempt}/3: ${maskError(error).message}`);
+            },
+          },
+        );
       },
     };
-  } catch {
-    throw new Error(
-      "AWS Secrets Manager SDK not available. Install '@aws-sdk/client-secrets-manager' or set SENTINEL_BACKEND=file.",
-    );
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    // Check if it's a module not found error
+    if (err.message.includes('Cannot find module') || err.message.includes('Cannot find package')) {
+      throw new Error(
+        "AWS Secrets Manager SDK not available. Install with: npm install @aws-sdk/client-secrets-manager\n" +
+        "Or use file backend: set SENTINEL_BACKEND=file",
+      );
+    }
+    
+    // Re-throw other errors (credentials, network, etc.)
+    throw err;
   }
 }
 
@@ -123,20 +171,34 @@ async function vaultProvider(): Promise<Provider> {
   const ns = process.env.VAULT_NAMESPACE || '';
 
   async function doPut(fullKey: string, value: string) {
-    const body = JSON.stringify({ data: { value } });
-    const res = await fetch(kvWriteUrl(fullKey), {
-      method: 'POST',
-      headers: {
-        'X-Vault-Token': token,
-        'Content-Type': 'application/json',
-        ...(ns ? ({ 'X-Vault-Namespace': ns } as any) : {}),
+    return withRetry(
+      async () => {
+        const body = JSON.stringify({ data: { value } });
+        const res = await fetch(kvWriteUrl(fullKey), {
+          method: 'POST',
+          headers: {
+            'X-Vault-Token': token,
+            'Content-Type': 'application/json',
+            ...(ns ? ({ 'X-Vault-Namespace': ns } as any) : {}),
+          },
+          body,
+        } as any);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          const error = new Error(`Vault write failed: ${res.status} ${txt}`);
+          (error as any).statusCode = res.status;
+          throw error;
+        }
       },
-      body,
-    } as any);
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`Vault write failed: ${res.status} ${txt}`);
-    }
+      {
+        maxRetries: 3,
+        initialDelayMs: 1000,
+        retryableErrors: ['429', '500', '502', '503', '504', 'ECONNRESET', 'ETIMEDOUT'],
+        onRetry: (error, attempt) => {
+          console.warn(`Vault retry ${attempt}/3: ${maskError(error).message}`);
+        },
+      },
+    );
   }
 
   async function doGet(fullKey: string): Promise<string | undefined> {
