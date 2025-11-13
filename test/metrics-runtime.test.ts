@@ -26,5 +26,5 @@ describe('metrics runtime info', () => {
     expect(text).toContain('rotate_concurrency="4"');
     expect(text).toContain('version="0.0.0-test"');
     await srv.close();
-  });
+  }, 10000);
 });

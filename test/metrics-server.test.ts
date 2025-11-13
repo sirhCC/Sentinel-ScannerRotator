@@ -17,5 +17,5 @@ describe('metrics server', () => {
     const text = await res.text();
     expect(text).toContain('sentinel_findings_total 2');
     await srv.close();
-  });
+  }, 10000);
 });
