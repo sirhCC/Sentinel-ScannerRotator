@@ -85,6 +85,9 @@ describe('incremental scanning', () => {
   });
 
   it('detects new files with incremental scanning', async () => {
+    // Create .gitignore to exclude cache file
+    await fs.writeFile(path.join(tmpDir, '.gitignore'), '.cache.json\n');
+
     // Create initial file
     await fs.writeFile(path.join(tmpDir, 'file1.txt'), 'clean file');
 
@@ -103,11 +106,14 @@ describe('incremental scanning', () => {
 
     expect(findings1.length).toBe(0);
 
+    // Wait for cache to be fully written
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     // Add new file with secret (untracked)
     await fs.writeFile(path.join(tmpDir, 'file2.txt'), 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE');
 
     // Small delay to ensure filesystem/git sees the file
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Second scan: should detect new file
     const findings2 = await scanPath(tmpDir, [], tmpDir, {
