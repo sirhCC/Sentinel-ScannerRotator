@@ -242,8 +242,8 @@ async function vaultProvider(): Promise<Provider> {
   };
 }
 
-async function getProvider(): Promise<Provider> {
-  const which = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
+export async function getProvider(backendType?: string): Promise<Provider> {
+  const which = (backendType || process.env.SENTINEL_BACKEND || 'file').toLowerCase();
   if (which === 'aws') return awsProvider();
   if (which === 'vault') return vaultProvider();
   return fileProvider();
