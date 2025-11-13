@@ -20,7 +20,10 @@ describe('env and docker scanners', () => {
 
   it('detects sensitive values in Dockerfile ENV/ARG', async () => {
     const dockerPath = path.join(tmpDir, 'Dockerfile');
-    await fs.writeFile(dockerPath, 'FROM alpine\nENV SECRET_TOKEN=myreallylongsecrettoken\nARG ACCESS_KEY=AKIAABCDEFGHIJKLMNOP');
+    await fs.writeFile(
+      dockerPath,
+      'FROM alpine\nENV SECRET_TOKEN=myreallylongsecrettoken\nARG ACCESS_KEY=AKIAABCDEFGHIJKLMNOP',
+    );
     const results = await scanPath(tmpDir);
     expect(results.length).toBeGreaterThan(0);
   });

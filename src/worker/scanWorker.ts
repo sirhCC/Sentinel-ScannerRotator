@@ -21,6 +21,6 @@ parentPort.on('message', (msg: Msg) => {
 
 async function scanFileWithHash(filePath: string, baseDir?: string) {
   const plugins = getScannerPlugins();
-  const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
+  const plugin = plugins.find((p) => p.supports(filePath)) || plugins[plugins.length - 1];
   return plugin.scan(filePath, baseDir ?? path.dirname(filePath));
 }

@@ -1,22 +1,25 @@
-import { Rotator, Finding } from "../types.js";
-import { safeUpdate } from "../fileSafeUpdate.js";
+import { Rotator, Finding } from '../types.js';
+import { safeUpdate } from '../fileSafeUpdate.js';
 
 export const applyRotator: Rotator = {
-  name: "apply",
+  name: 'apply',
   async rotateFile(filePath, findings, options) {
     if (!Array.isArray(findings) || !findings.length) return [];
     if (options?.dryRun) {
-      return findings.map(f => ({ success: true, message: `Would replace in ${filePath}:${f.line}` }));
+      return findings.map((f) => ({
+        success: true,
+        message: `Would replace in ${filePath}:${f.line}`,
+      }));
     }
     const ts = Date.now();
-    const replacements = findings.map(f => ({
+    const replacements = findings.map((f) => ({
       raw: f.match,
-      placeholder: (options?.template
+      placeholder: options?.template
         ? options.template
-          .replace(/\{\{match\}\}/g, f.match)
-          .replace(/\{\{timestamp\}\}/g, String(ts))
-          .replace(/\{\{file\}\}/g, f.filePath)
-        : `__REPLACED_SECRET_${ts}__`),
+            .replace(/\{\{match\}\}/g, f.match)
+            .replace(/\{\{timestamp\}\}/g, String(ts))
+            .replace(/\{\{file\}\}/g, f.filePath)
+        : `__REPLACED_SECRET_${ts}__`,
     }));
     const res = await safeUpdate(filePath, (content) => {
       let out = content;
@@ -39,17 +42,18 @@ export const applyRotator: Rotator = {
           .replace(/\{\{timestamp\}\}/g, String(ts))
           .replace(/\{\{file\}\}/g, finding.filePath)
       : `__REPLACED_SECRET_${ts}__`;
-    const res = await safeUpdate(
-      finding.filePath,
-      (content) => {
-        // Replace all occurrences of the exact matched string
-        if (!finding.match) return content;
-        // Escape special regex chars and use global replacement
-        const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return content.replace(new RegExp(esc, 'g'), placeholder);
-      }
-    );
-    if (res.success) return { success: true, message: `Replaced in ${finding.filePath} (backup: ${res.backupPath})` };
+    const res = await safeUpdate(finding.filePath, (content) => {
+      // Replace all occurrences of the exact matched string
+      if (!finding.match) return content;
+      // Escape special regex chars and use global replacement
+      const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return content.replace(new RegExp(esc, 'g'), placeholder);
+    });
+    if (res.success)
+      return {
+        success: true,
+        message: `Replaced in ${finding.filePath} (backup: ${res.backupPath})`,
+      };
     return { success: false, message: `Failed to replace in ${finding.filePath}: ${res.error}` };
   },
 };

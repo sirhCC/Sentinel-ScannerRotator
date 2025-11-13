@@ -12,7 +12,7 @@ export async function loadIgnorePatterns(startDir: string, extraPatterns?: strin
     try {
       const content = await fs.readFile(p, 'utf8');
       ig.add(content.split(/\r?\n/));
-  } catch {
+    } catch {
       // ignore missing file
     }
   }

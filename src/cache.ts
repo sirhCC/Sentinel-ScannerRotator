@@ -29,7 +29,9 @@ export async function loadCache(filePath: string): Promise<CacheData> {
 
 export async function saveCache(filePath: string, data: CacheData): Promise<void> {
   const dir = path.dirname(filePath);
-  try { await fs.mkdir(dir, { recursive: true }); } catch {}
+  try {
+    await fs.mkdir(dir, { recursive: true });
+  } catch {}
   const toWrite: CacheData = { version: 2, entries: data.entries };
   await fs.writeFile(filePath, JSON.stringify(toWrite, null, 2), 'utf8');
 }

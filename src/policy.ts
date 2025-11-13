@@ -5,12 +5,14 @@ import { z } from 'zod';
 
 // Zod schema for policy validation
 const PolicySchema = z.object({
-  thresholds: z.object({
-    total: z.number().int().nonnegative().optional(),
-    high: z.number().int().nonnegative().optional(),
-    medium: z.number().int().nonnegative().optional(),
-    low: z.number().int().nonnegative().optional(),
-  }).optional(),
+  thresholds: z
+    .object({
+      total: z.number().int().nonnegative().optional(),
+      high: z.number().int().nonnegative().optional(),
+      medium: z.number().int().nonnegative().optional(),
+      low: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   forbidRules: z.array(z.string().min(1)).optional(),
   minSeverity: z.enum(['low', 'medium', 'high']).optional(),
 });
@@ -27,7 +29,7 @@ function validatePolicy(data: unknown): Policy {
       console.error('[DEBUG] Policy validation failed:', err);
     }
     if (err instanceof z.ZodError) {
-      const issues = err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+      const issues = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
       throw new Error(`Invalid policy configuration: ${issues}`);
     }
     throw err;
@@ -82,5 +84,10 @@ export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> 
 }
 
 async function exists(p: string) {
-  try { await fs.stat(p); return true; } catch { return false; }
+  try {
+    await fs.stat(p);
+    return true;
+  } catch {
+    return false;
+  }
 }

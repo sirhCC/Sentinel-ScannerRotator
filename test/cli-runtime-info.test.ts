@@ -6,7 +6,9 @@ describe('cli --show-runtime-info', () => {
     let out = '';
     const origLog = console.log;
     try {
-      console.log = (...args: any[]) => { out += args.join(' ') + '\n'; };
+      console.log = (...args: any[]) => {
+        out += args.join(' ') + '\n';
+      };
       const code = await runCli(['--show-runtime-info']);
       expect(code).toBe(0);
       expect(out).toMatch(/Engine:/);
@@ -19,7 +21,9 @@ describe('cli --show-runtime-info', () => {
     let out = '';
     const origLog = console.log;
     try {
-      console.log = (...args: any[]) => { out += args.join(' '); };
+      console.log = (...args: any[]) => {
+        out += args.join(' ');
+      };
       const code = await runCli(['--show-runtime-info', '--log-json']);
       expect(code).toBe(0);
       const obj = JSON.parse(out);

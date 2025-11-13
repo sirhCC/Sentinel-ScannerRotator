@@ -9,9 +9,13 @@ describe('apply rotator safeUpdate', () => {
     const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
     process.env.SENTINEL_TMP_DIR = uniqueTmp;
     // ensure no stale tmp dir/file and prepare writable tmp dir
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch (_) {}
-    try { fs.mkdirSync(uniqueTmp, { recursive: true }); } catch (_) {}
-  fs.writeFileSync(tmp, 'secret AKIAABCDEFGHIJKLMNOP end');
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch (_) {}
+    try {
+      fs.mkdirSync(uniqueTmp, { recursive: true });
+    } catch (_) {}
+    fs.writeFileSync(tmp, 'secret AKIAABCDEFGHIJKLMNOP end');
     const findings = [{ filePath: tmp, line: 1, column: 8, match: 'AKIAABCDEFGHIJKLMNOP' }];
     const res = await applyRotator.rotate(findings[0] as any);
     const content = fs.readFileSync(tmp, 'utf8');
@@ -24,16 +28,18 @@ describe('apply rotator safeUpdate', () => {
       } catch (_) {}
     }
     fs.unlinkSync(tmp);
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch (_) {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch (_) {}
     delete process.env.SENTINEL_TMP_DIR;
     expect(res.success).toBe(true);
     expect(content).toContain('__REPLACED_SECRET_');
   });
 
   it('rolls back on simulated failure', async () => {
-  const tmp = 'tmp-apply-fail.txt';
-  const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
-  process.env.SENTINEL_TMP_DIR = uniqueTmp;
+    const tmp = 'tmp-apply-fail.txt';
+    const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+    process.env.SENTINEL_TMP_DIR = uniqueTmp;
     fs.writeFileSync(tmp, 'secret AKIAABCDEFGHIJKLMNOP end');
     // monkey-patch fs.writeFile to throw when writing tmp file to simulate failure
     const fsPromises = require('fs/promises');
@@ -51,19 +57,21 @@ describe('apply rotator safeUpdate', () => {
     // restore
     fsPromises.writeFile = originalWriteFile;
 
-  const content = fs.readFileSync(tmp, 'utf8');
+    const content = fs.readFileSync(tmp, 'utf8');
     fs.unlinkSync(tmp);
-  try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-  delete process.env.SENTINEL_TMP_DIR;
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    delete process.env.SENTINEL_TMP_DIR;
     expect(res.success).toBe(false);
     // content should remain original
     expect(content).toContain('AKIAABCDEFGHIJKLMNOP');
   });
 
   it('supports template-based replacement tokens', async () => {
-  const tmp = 'tmp-apply-template.txt';
-  const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
-  process.env.SENTINEL_TMP_DIR = uniqueTmp;
+    const tmp = 'tmp-apply-template.txt';
+    const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
+    process.env.SENTINEL_TMP_DIR = uniqueTmp;
     const secret = 'AKIAABCDEFGHIJKLMNOP';
     const fileContent = `before ${secret} after`;
     const fs = require('fs');
@@ -73,9 +81,13 @@ describe('apply rotator safeUpdate', () => {
     const res = await applyRotator.rotate(finding, { template: '__MASKED_{{timestamp}}__' });
     const content = fs.readFileSync(tmp, 'utf8');
     // cleanup
-  try { fs.unlinkSync(tmp); } catch {}
-  try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-  delete process.env.SENTINEL_TMP_DIR;
+    try {
+      fs.unlinkSync(tmp);
+    } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    delete process.env.SENTINEL_TMP_DIR;
     expect(res.success).toBe(true);
     expect(content).toMatch(/__MASKED_\d+__/);
   });

@@ -84,7 +84,7 @@ export async function installRulesets(opts: {
   requireSigned?: boolean; // require ruleset item signatures
   catalogPubkey?: string; // pubkey for catalog detached signature
   catalogRequireSigned?: boolean; // require catalog to be signed
-}): Promise<{ installed: string[]; dir: string }>{
+}): Promise<{ installed: string[]; dir: string }> {
   const { catalog, names, cacheDir, pubkey } = opts;
   // Load raw catalog bytes for optional detached signature verification
   const catBuf = await fetchMaybe(catalog);
@@ -99,7 +99,9 @@ export async function installRulesets(opts: {
   }
   const cat = JSON.parse(catBuf.toString('utf8')) as Catalog;
   const pk = pubkey || cat.pubkey;
-  try { await fs.mkdir(cacheDir, { recursive: true }); } catch {}
+  try {
+    await fs.mkdir(cacheDir, { recursive: true });
+  } catch {}
   const map: Record<string, CatalogEntry> = {};
   for (const e of cat.rulesets) map[e.name] = e;
   const done: string[] = [];

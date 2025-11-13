@@ -17,17 +17,26 @@ describe('scan cache', () => {
     const f1 = path.join(workDir, 'a.txt');
     await fs.writeFile(f1, 'token=AKIAABCDEFGHIJKLMNOP\nnone');
 
-    const run1 = await scanPath(workDir, undefined, undefined, { cachePath: cacheFile, concurrency: 2 });
+    const run1 = await scanPath(workDir, undefined, undefined, {
+      cachePath: cacheFile,
+      concurrency: 2,
+    });
     expect(run1.length).toBeGreaterThan(0);
 
     // second run should use cache and yield same findings
-    const run2 = await scanPath(workDir, undefined, undefined, { cachePath: cacheFile, concurrency: 2 });
+    const run2 = await scanPath(workDir, undefined, undefined, {
+      cachePath: cacheFile,
+      concurrency: 2,
+    });
     expect(run2.length).toEqual(run1.length);
 
     // modify file to invalidate cache
     await new Promise((r) => setTimeout(r, 5)); // ensure mtime changes on fast filesystems
     await fs.writeFile(f1, 'nothing to see here');
-    const run3 = await scanPath(workDir, undefined, undefined, { cachePath: cacheFile, concurrency: 2 });
+    const run3 = await scanPath(workDir, undefined, undefined, {
+      cachePath: cacheFile,
+      concurrency: 2,
+    });
     expect(run3.length).toEqual(0);
   });
 });

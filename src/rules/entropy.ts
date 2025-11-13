@@ -41,8 +41,16 @@ function tokenizeCandidates(line: string): Array<{ token: string; index: number 
 export function findHighEntropyTokens(line: string, opts?: EntropyOptions) {
   const envThr = Number(process.env.SENTINEL_ENTROPY_THRESHOLD);
   const envMin = Number(process.env.SENTINEL_ENTROPY_MINLEN);
-  const threshold = Number.isFinite(envThr) ? envThr : ((opts && typeof opts.threshold === 'number') ? opts.threshold : 3.5);
-  const minLength = Number.isFinite(envMin) ? envMin : ((opts && typeof opts.minLength === 'number') ? opts.minLength : 32);
+  const threshold = Number.isFinite(envThr)
+    ? envThr
+    : opts && typeof opts.threshold === 'number'
+      ? opts.threshold
+      : 3.5;
+  const minLength = Number.isFinite(envMin)
+    ? envMin
+    : opts && typeof opts.minLength === 'number'
+      ? opts.minLength
+      : 32;
   const results: Array<{ token: string; index: number; entropy: number }> = [];
   const cands = tokenizeCandidates(line);
   for (const c of cands) {

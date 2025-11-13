@@ -20,12 +20,17 @@ function genKey(finding: Finding, ts: number) {
 }
 
 async function ensureDir(p: string) {
-  try { await fs.mkdir(p, { recursive: true }); } catch {}
+  try {
+    await fs.mkdir(p, { recursive: true });
+  } catch {}
 }
 
 function fileProvider(): Provider {
-  const outPath = process.env.SENTINEL_BACKEND_FILE || path.join(process.cwd(), '.sentinel_secrets.json');
-  const histPath = (outPath.endsWith('.json') ? outPath.replace(/\.json$/i, '.history.ndjson') : `${outPath}.history.ndjson`);
+  const outPath =
+    process.env.SENTINEL_BACKEND_FILE || path.join(process.cwd(), '.sentinel_secrets.json');
+  const histPath = outPath.endsWith('.json')
+    ? outPath.replace(/\.json$/i, '.history.ndjson')
+    : `${outPath}.history.ndjson`;
   return {
     name: 'file',
     async put(key: string, value: string) {
@@ -57,8 +62,7 @@ function fileProvider(): Provider {
       } catch {
         return undefined;
       }
-    }
-    ,
+    },
     async delete(key: string) {
       try {
         const txt = await fs.readFile(outPath, 'utf8');
@@ -70,7 +74,7 @@ function fileProvider(): Provider {
       } catch {
         // ignore
       }
-    }
+    },
   };
 }
 
@@ -82,7 +86,7 @@ async function awsProvider(): Promise<Provider> {
     const { SecretsManagerClient, CreateSecretCommand, PutSecretValueCommand } = mod;
     const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
     const client = new SecretsManagerClient({ region });
-  return {
+    return {
       name: 'aws',
       async put(key: string, value: string) {
         // create or update secret named key (optionally with prefix)
@@ -90,15 +94,17 @@ async function awsProvider(): Promise<Provider> {
         const name = prefix ? `${prefix}${key}` : key;
         try {
           await client.send(new CreateSecretCommand({ Name: name, SecretString: value }));
-    } catch {
+        } catch {
           // If already exists, update value
           await client.send(new PutSecretValueCommand({ SecretId: name, SecretString: value }));
         }
-  return name; // return secret name as ref suffix
-      }
-  };
+        return name; // return secret name as ref suffix
+      },
+    };
   } catch {
-    throw new Error("AWS Secrets Manager SDK not available. Install '@aws-sdk/client-secrets-manager' or set SENTINEL_BACKEND=file.");
+    throw new Error(
+      "AWS Secrets Manager SDK not available. Install '@aws-sdk/client-secrets-manager' or set SENTINEL_BACKEND=file.",
+    );
   }
 }
 
@@ -122,8 +128,8 @@ async function vaultProvider(): Promise<Provider> {
       method: 'POST',
       headers: {
         'X-Vault-Token': token,
-        'Content-Type': 'application/json'
-      , ...(ns ? { 'X-Vault-Namespace': ns } as any : {})
+        'Content-Type': 'application/json',
+        ...(ns ? ({ 'X-Vault-Namespace': ns } as any) : {}),
       },
       body,
     } as any);
@@ -138,8 +144,8 @@ async function vaultProvider(): Promise<Provider> {
       method: 'GET',
       headers: {
         'X-Vault-Token': token,
-        'Content-Type': 'application/json'
-      , ...(ns ? { 'X-Vault-Namespace': ns } as any : {})
+        'Content-Type': 'application/json',
+        ...(ns ? ({ 'X-Vault-Namespace': ns } as any) : {}),
       },
     } as any);
     if (!res.ok) return undefined;
@@ -170,7 +176,7 @@ async function vaultProvider(): Promise<Provider> {
       } catch {
         // ignore
       }
-    }
+    },
   };
 }
 
@@ -194,7 +200,9 @@ export const backendRotator: Rotator = {
     if (options?.dryRun) {
       // Derive refs for each finding and preview a single-file replacement
       return findings.map((f) => {
-        const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || `${path.basename(f.filePath)}_${f.line}_${ts}`;
+        const key =
+          process.env.SENTINEL_BACKEND_KEY_OVERRIDE ||
+          `${path.basename(f.filePath)}_${f.line}_${ts}`;
         const ref = `secretref://${backendName}/${key}`;
         const placeholder = options?.template
           ? options.template
@@ -203,7 +211,10 @@ export const backendRotator: Rotator = {
               .replace(/\{\{file\}\}/g, f.filePath)
               .replace(/\{\{ref\}\}/g, ref)
           : ref;
-        return { success: true, message: `Would store secret and replace with ${placeholder} in ${filePath}:${f.line}` };
+        return {
+          success: true,
+          message: `Would store secret and replace with ${placeholder} in ${filePath}:${f.line}`,
+        };
       });
     }
     const provider = await getProvider();
@@ -215,7 +226,9 @@ export const backendRotator: Rotator = {
       if (options?.verify && provider.get) {
         const readBack = await provider.get(key);
         if (readBack !== f.match) {
-          try { await provider.delete?.(key); } catch {}
+          try {
+            await provider.delete?.(key);
+          } catch {}
           return [{ success: false, message: `Verification failed for ${provider.name}:${key}` }];
         }
       }
@@ -238,38 +251,55 @@ export const backendRotator: Rotator = {
       }
       return out;
     });
-    if (res.success) return [{ success: true, message: `Stored secret in ${provider.name} and replaced in ${filePath} (backup: ${res.backupPath})` }];
+    if (res.success)
+      return [
+        {
+          success: true,
+          message: `Stored secret in ${provider.name} and replaced in ${filePath} (backup: ${res.backupPath})`,
+        },
+      ];
     // Rollback all keys best-effort
-    for (const r of records) { try { await provider.delete?.(r.key); } catch {} }
-    return [{ success: false, message: `Failed to update file after storing secret(s): ${res.error}` }];
+    for (const r of records) {
+      try {
+        await provider.delete?.(r.key);
+      } catch {}
+    }
+    return [
+      { success: false, message: `Failed to update file after storing secret(s): ${res.error}` },
+    ];
   },
   async rotate(finding, options) {
     const ts = Date.now();
     const backendName = (process.env.SENTINEL_BACKEND || 'file').toLowerCase();
-  const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || genKey(finding, ts);
+    const key = process.env.SENTINEL_BACKEND_KEY_OVERRIDE || genKey(finding, ts);
 
     if (options?.dryRun) {
       const ref = buildRef(backendName, key);
-  const placeholder = options?.template
+      const placeholder = options?.template
         ? options.template
             .replace(/\{\{match\}\}/g, finding.match)
             .replace(/\{\{timestamp\}\}/g, String(ts))
             .replace(/\{\{file\}\}/g, finding.filePath)
             .replace(/\{\{ref\}\}/g, ref)
         : ref;
-      return { success: true, message: `Would store secret and replace with ${placeholder} in ${finding.filePath}:${finding.line}` };
+      return {
+        success: true,
+        message: `Would store secret and replace with ${placeholder} in ${finding.filePath}:${finding.line}`,
+      };
     }
-  let provider: Provider | undefined;
-  try {
-    provider = await getProvider();
-    const refSuffix = await provider.put(key, finding.match);
+    let provider: Provider | undefined;
+    try {
+      provider = await getProvider();
+      const refSuffix = await provider.put(key, finding.match);
       const ref = buildRef(provider.name, refSuffix);
       if (options?.verify && provider.get) {
         const readBack = await provider.get(key);
         if (readBack !== finding.match) {
-      // cleanup
-      try { await provider.delete?.(key); } catch {}
-      return { success: false, message: `Verification failed for ${provider.name}:${key}` };
+          // cleanup
+          try {
+            await provider.delete?.(key);
+          } catch {}
+          return { success: false, message: `Verification failed for ${provider.name}:${key}` };
         }
       }
       const placeholder = options?.template
@@ -279,20 +309,26 @@ export const backendRotator: Rotator = {
             .replace(/\{\{file\}\}/g, finding.filePath)
             .replace(/\{\{ref\}\}/g, ref)
         : ref;
-      const res = await safeUpdate(
-        finding.filePath,
-        (content) => {
-          if (!finding.match) return content;
-          const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          return content.replace(new RegExp(esc, 'g'), placeholder);
-        }
-      );
-    if (res.success) return { success: true, message: `Stored secret in ${provider.name} and replaced in ${finding.filePath} (backup: ${res.backupPath})` };
-    // rollback provider on failure
-    try { await provider.delete?.(key); } catch {}
-    return { success: false, message: `Failed to update file after storing secret: ${res.error}` };
+      const res = await safeUpdate(finding.filePath, (content) => {
+        if (!finding.match) return content;
+        const esc = finding.match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return content.replace(new RegExp(esc, 'g'), placeholder);
+      });
+      if (res.success)
+        return {
+          success: true,
+          message: `Stored secret in ${provider.name} and replaced in ${finding.filePath} (backup: ${res.backupPath})`,
+        };
+      // rollback provider on failure
+      try {
+        await provider.delete?.(key);
+      } catch {}
+      return {
+        success: false,
+        message: `Failed to update file after storing secret: ${res.error}`,
+      };
     } catch (e: any) {
       return { success: false, message: `Failed to store secret: ${e?.message || e}` };
     }
-  }
+  },
 };

@@ -29,7 +29,7 @@ describe('tar.gz scanner plugin', () => {
 
     const results = await scanPath(tmpDir);
     expect(results.length).toBeGreaterThan(0);
-    const anyFromTgz = results.find(r => r.filePath.includes('archive.tgz:inner.txt'));
+    const anyFromTgz = results.find((r) => r.filePath.includes('archive.tgz:inner.txt'));
     expect(anyFromTgz).toBeTruthy();
   });
 });

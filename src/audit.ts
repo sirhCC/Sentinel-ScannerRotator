@@ -19,9 +19,13 @@ function stableStringify(obj: any): string {
 
 export async function createAuditWriter(filePath: string, append = false, options?: AuditOptions) {
   const dir = path.dirname(filePath);
-  try { await fs.mkdir(dir, { recursive: true }); } catch {}
+  try {
+    await fs.mkdir(dir, { recursive: true });
+  } catch {}
   if (!append) {
-    try { await fs.writeFile(filePath, '', 'utf8'); } catch {}
+    try {
+      await fs.writeFile(filePath, '', 'utf8');
+    } catch {}
   }
   async function writeLine(obj: AuditEvent) {
     const payloadStr = stableStringify(obj);
@@ -30,7 +34,10 @@ export async function createAuditWriter(filePath: string, append = false, option
     const key = options?.signKey ?? (process.env.SENTINEL_AUDIT_SIGN_KEY || '');
     const keyId = options?.keyId ?? process.env.SENTINEL_AUDIT_SIGN_KEY_ID;
     if (key && String(key).length > 0) {
-      const sig = crypto.createHmac('sha256', key as any).update(hash).digest('hex');
+      const sig = crypto
+        .createHmac('sha256', key as any)
+        .update(hash)
+        .digest('hex');
       event.sig = `hmac-sha256-${sig}`;
       if (keyId) event.keyId = keyId;
     }
@@ -39,6 +46,8 @@ export async function createAuditWriter(filePath: string, append = false, option
   }
   return {
     write: writeLine,
-    async close() { /* no-op for now */ },
+    async close() {
+      /* no-op for now */
+    },
   };
 }

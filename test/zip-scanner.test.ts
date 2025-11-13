@@ -21,7 +21,7 @@ describe('zip scanner plugin', () => {
 
     const results = await scanPath(tmpDir);
     expect(results.length).toBeGreaterThan(0);
-    const anyFromZip = results.find(r => r.filePath.includes('archive.zip:inner.txt'));
+    const anyFromZip = results.find((r) => r.filePath.includes('archive.zip:inner.txt'));
     expect(anyFromZip).toBeTruthy();
   });
 });

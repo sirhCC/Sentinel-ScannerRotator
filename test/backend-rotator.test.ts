@@ -14,7 +14,10 @@ describe('backend rotator (file provider)', () => {
     const f = 'tmp-backend.txt';
     fs.writeFileSync(f, 'before AKIAABCDEFGHIJKLMNOP after');
     const { backendRotator } = await import('../src/rotators/backendRotator');
-    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 8, match: 'AKIAABCDEFGHIJKLMNOP' } as any, {});
+    const res = await backendRotator.rotate(
+      { filePath: f, line: 1, column: 8, match: 'AKIAABCDEFGHIJKLMNOP' } as any,
+      {},
+    );
     expect(res.success).toBe(true);
     const txt = fs.readFileSync(f, 'utf8');
     expect(txt).toMatch(/secretref:\/\/file\//);
@@ -23,9 +26,15 @@ describe('backend rotator (file provider)', () => {
     expect(values).toContain('AKIAABCDEFGHIJKLMNOP');
 
     // cleanup
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-    try { fs.unlinkSync(f); } catch {}
-    try { fs.unlinkSync(backendFile); } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(f);
+    } catch {}
+    try {
+      fs.unlinkSync(backendFile);
+    } catch {}
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
     delete process.env.SENTINEL_BACKEND_FILE;
@@ -40,16 +49,25 @@ describe('backend rotator (file provider)', () => {
     const f = 'tmp-backend-verify.txt';
     fs.writeFileSync(f, 'abc AKIAABCDEFGHIJKLMNOP def');
     const { backendRotator } = await import('../src/rotators/backendRotator');
-    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any, { verify: true });
+    const res = await backendRotator.rotate(
+      { filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any,
+      { verify: true },
+    );
     expect(res.success).toBe(true);
     const content = fs.readFileSync(f, 'utf8');
     expect(content).toMatch(/secretref:\/\/file\//);
     const map = JSON.parse(fs.readFileSync(backendFile, 'utf8'));
     const values = Object.values(map as any);
     expect(values).toContain('AKIAABCDEFGHIJKLMNOP');
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-    try { fs.unlinkSync(f); } catch {}
-    try { fs.unlinkSync(backendFile); } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(f);
+    } catch {}
+    try {
+      fs.unlinkSync(backendFile);
+    } catch {}
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
     delete process.env.SENTINEL_BACKEND_FILE;
@@ -62,13 +80,20 @@ describe('backend rotator (file provider)', () => {
     const f = 'tmp-backend-dry.txt';
     fs.writeFileSync(f, 'xx AKIAABCDEFGHIJKLMNOP yy');
     const { backendRotator } = await import('../src/rotators/backendRotator');
-    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any, { dryRun: true });
+    const res = await backendRotator.rotate(
+      { filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any,
+      { dryRun: true },
+    );
     expect(res.success).toBe(true);
     expect(res.message).toMatch(/Would store secret and replace/);
     const txt = fs.readFileSync(f, 'utf8');
     expect(txt).toContain('AKIAABCDEFGHIJKLMNOP');
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-    try { fs.unlinkSync(f); } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(f);
+    } catch {}
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
   });
@@ -80,11 +105,18 @@ describe('backend rotator (file provider)', () => {
     const f = 'tmp-backend-vault-dry.txt';
     fs.writeFileSync(f, 'xx AKIAABCDEFGHIJKLMNOP yy');
     const { backendRotator } = await import('../src/rotators/backendRotator');
-    const res = await backendRotator.rotate({ filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any, { dryRun: true, template: '__REF_{{ref}}__' });
+    const res = await backendRotator.rotate(
+      { filePath: f, line: 1, column: 5, match: 'AKIAABCDEFGHIJKLMNOP' } as any,
+      { dryRun: true, template: '__REF_{{ref}}__' },
+    );
     expect(res.success).toBe(true);
     expect(res.message).toMatch(/Would store secret and replace/);
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-    try { fs.unlinkSync(f); } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(f);
+    } catch {}
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
   });

@@ -1,7 +1,7 @@
-import fs from "fs/promises";
-import path from "path";
-import { Finding, ScanResult } from "./types.js";
-import { loadIgnorePatterns } from "./ignore.js";
+import fs from 'fs/promises';
+import path from 'path';
+import { Finding, ScanResult } from './types.js';
+import { loadIgnorePatterns } from './ignore.js';
 import { loadCache, saveCache, CacheData } from './cache.js';
 import { getScannerPlugins } from './plugins/scanners.js';
 import crypto from 'crypto';
@@ -14,7 +14,12 @@ type ScanOptions = {
 
 // Note: regex loading handled by plugins/scanners
 
-export async function scanPath(targetPath: string, extraIg?: string[], baseDir?: string, options?: ScanOptions): Promise<Finding[]> {
+export async function scanPath(
+  targetPath: string,
+  extraIg?: string[],
+  baseDir?: string,
+  options?: ScanOptions,
+): Promise<Finding[]> {
   const stats = await fs.stat(targetPath);
   if (!baseDir) baseDir = stats.isFile() ? path.dirname(targetPath) : targetPath;
   if (stats.isFile()) return scanFile(targetPath, baseDir);
@@ -33,9 +38,15 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
       excludes.add(abs + '.history.ndjson');
     }
   }
-  await walkDirCollect(scanRoot, scanRoot, ig as { ignores: (p: string) => boolean }, files, excludes);
+  await walkDirCollect(
+    scanRoot,
+    scanRoot,
+    ig as { ignores: (p: string) => boolean },
+    files,
+    excludes,
+  );
   const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
-  const conc = Math.max(1, (options?.concurrency ?? (isNaN(envConc) ? undefined : envConc)) ?? 8);
+  const conc = Math.max(1, options?.concurrency ?? (isNaN(envConc) ? undefined : envConc) ?? 8);
   // Load cache if configured
   const cachePath = options?.cachePath || process.env.SENTINEL_CACHE || '';
   let cache: CacheData | undefined;
@@ -101,7 +112,12 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
               if (precomputedHash) {
                 hash = precomputedHash;
               } else {
-                hash = r.computedHash ?? (await (async () => { const buf = await fs.readFile(file); return crypto.createHash('sha256').update(buf).digest('hex'); })());
+                hash =
+                  r.computedHash ??
+                  (await (async () => {
+                    const buf = await fs.readFile(file);
+                    return crypto.createHash('sha256').update(buf).digest('hex');
+                  })());
               }
             } catch {
               // Hash computation failed, cache entry will use mtime/size only
@@ -128,7 +144,9 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
     for (const k of Object.keys(cache.entries)) {
       if (!scannedKeys.has(k)) delete cache.entries[k];
     }
-    try { await saveCache(cachePath, cache); } catch (err) {
+    try {
+      await saveCache(cachePath, cache);
+    } catch (err) {
       if (process.env.SENTINEL_DEBUG === 'true') {
         console.error('[DEBUG] Failed to save cache:', err);
       }
@@ -137,7 +155,13 @@ export async function scanPath(targetPath: string, extraIg?: string[], baseDir?:
   return out;
 }
 
-async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: string) => boolean }, files: string[], excludes?: Set<string>) {
+async function walkDirCollect(
+  dir: string,
+  root: string,
+  ig: { ignores: (p: string) => boolean },
+  files: string[],
+  excludes?: Set<string>,
+) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
@@ -155,14 +179,14 @@ async function walkDirCollect(dir: string, root: string, ig: { ignores: (p: stri
 export async function scanFile(filePath: string, baseDir?: string): Promise<Finding[]> {
   // Choose a scanner plugin based on file type; fallback to text
   const plugins = getScannerPlugins();
-  const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
+  const plugin = plugins.find((p) => p.supports(filePath)) || plugins[plugins.length - 1];
   const res = await plugin.scan(filePath, baseDir ?? path.dirname(filePath));
   return res.findings;
 }
 
 async function scanFileWithHash(filePath: string, baseDir?: string): Promise<ScanResult> {
   const plugins = getScannerPlugins();
-  const plugin = plugins.find(p => p.supports(filePath)) || plugins[plugins.length - 1];
+  const plugin = plugins.find((p) => p.supports(filePath)) || plugins[plugins.length - 1];
   return plugin.scan(filePath, baseDir ?? path.dirname(filePath));
 }
 
@@ -170,8 +194,16 @@ async function scanFileWithHash(filePath: string, baseDir?: string): Promise<Sca
 class WorkerPool {
   private workers: Worker[] = [];
   private idle: Worker[] = [];
-  private queue: Array<{ file: string; baseDir?: string; resolve: (r: ScanResult) => void; reject: (e: any) => void }>=[];
-  private constructor(private workerFile: string, size: number) {
+  private queue: Array<{
+    file: string;
+    baseDir?: string;
+    resolve: (r: ScanResult) => void;
+    reject: (e: any) => void;
+  }> = [];
+  private constructor(
+    private workerFile: string,
+    size: number,
+  ) {
     for (let i = 0; i < size; i++) {
       const w = new Worker(workerFile, { execArgv: [], env: process.env as any });
       this.bind(w);
@@ -204,15 +236,18 @@ class WorkerPool {
     w.on('error', (err) => {
       const task = this.currentTaskMap.get(w);
       this.currentTaskMap.delete(w);
-      this.idle = this.idle.filter(x => x !== w);
+      this.idle = this.idle.filter((x) => x !== w);
       if (task) task.reject(err);
     });
     w.on('exit', () => {
-      this.idle = this.idle.filter(x => x !== w);
-      this.workers = this.workers.filter(x => x !== w);
+      this.idle = this.idle.filter((x) => x !== w);
+      this.workers = this.workers.filter((x) => x !== w);
     });
   }
-  private currentTaskMap = new Map<Worker, { file: string; baseDir?: string; resolve: (r: ScanResult) => void; reject: (e: any) => void }>();
+  private currentTaskMap = new Map<
+    Worker,
+    { file: string; baseDir?: string; resolve: (r: ScanResult) => void; reject: (e: any) => void }
+  >();
   private pump() {
     while (this.idle.length && this.queue.length) {
       const w = this.idle.pop()!;
@@ -229,7 +264,9 @@ class WorkerPool {
   }
   destroy() {
     for (const w of this.workers) {
-      try { void w.terminate(); } catch {}
+      try {
+        void w.terminate();
+      } catch {}
     }
     this.workers = [];
     this.idle = [];

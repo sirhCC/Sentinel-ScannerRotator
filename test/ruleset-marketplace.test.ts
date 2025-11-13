@@ -10,20 +10,28 @@ describe('ruleset marketplace (local catalog)', () => {
 
     const work = 'tmp-market';
     const cache = path.join(work, 'cache');
-    try { fs.mkdirSync(work); } catch {}
-    try { fs.mkdirSync(cache); } catch {}
+    try {
+      fs.mkdirSync(work);
+    } catch {}
+    try {
+      fs.mkdirSync(cache);
+    } catch {}
 
-    const rs = [ { name: 'CAT_RULE', regex: 'CATA_[0-9]{4}', severity: 'low' } ];
+    const rs = [{ name: 'CAT_RULE', regex: 'CATA_[0-9]{4}', severity: 'low' }];
     const rsPath = path.join(work, 'cat.ruleset.json');
     fs.writeFileSync(rsPath, JSON.stringify({ name: 'cat', rules: rs }, null, 2));
     const buf = fs.readFileSync(rsPath);
     const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
 
-    const catalog = { rulesets: [ { name: 'cat', url: rsPath, sha256 } ] };
+    const catalog = { rulesets: [{ name: 'cat', url: rsPath, sha256 }] };
     const catPath = path.join(work, 'catalog.json');
     fs.writeFileSync(catPath, JSON.stringify(catalog, null, 2));
 
-    const { installed, dir } = await installRulesets({ catalog: catPath, names: ['cat'], cacheDir: cache });
+    const { installed, dir } = await installRulesets({
+      catalog: catPath,
+      names: ['cat'],
+      cacheDir: cache,
+    });
     expect(installed).toContain('cat');
     expect(fs.existsSync(path.join(dir, 'cat.ruleset.json'))).toBe(true);
 
@@ -37,6 +45,8 @@ describe('ruleset marketplace (local catalog)', () => {
     const rules = await loadSelectedRules();
     expect(rules.find((r: any) => r.name === 'CAT_RULE')).toBeTruthy();
 
-    try { fs.rmSync(work, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(work, { recursive: true, force: true });
+    } catch {}
   });
 });

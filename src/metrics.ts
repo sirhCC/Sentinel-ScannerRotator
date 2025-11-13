@@ -3,7 +3,7 @@ import path from 'path';
 
 export type Metrics = {
   findings_total: number;
-  findings_by_severity: Record<'low'|'medium'|'high', number>;
+  findings_by_severity: Record<'low' | 'medium' | 'high', number>;
   rotations_total: number;
   rotations_success: number;
   rotations_failed: number;
@@ -31,13 +31,13 @@ export function newMetrics(): Metrics {
     rotations_total: 0,
     rotations_success: 0,
     rotations_failed: 0,
-  rules_compiled_total: 0,
-  files_skipped_total: 0,
-  files_skipped_by_reason: {},
-  ml_findings_total: 0,
-  ml_invocations_total: 0,
-  ml_errors_total: 0,
-  ml_time_ms_total: 0,
+    rules_compiled_total: 0,
+    files_skipped_total: 0,
+    files_skipped_by_reason: {},
+    ml_findings_total: 0,
+    ml_invocations_total: 0,
+    ml_errors_total: 0,
+    ml_time_ms_total: 0,
   };
 }
 
@@ -62,10 +62,12 @@ export async function writeProm(metrics: Metrics, filePath: string) {
   lines.push('# HELP sentinel_findings_total Total findings detected');
   lines.push('# TYPE sentinel_findings_total counter');
   lines.push(`sentinel_findings_total ${metrics.findings_total}`);
-  for (const sev of ['low','medium','high'] as const) {
+  for (const sev of ['low', 'medium', 'high'] as const) {
     lines.push(`# HELP sentinel_findings_severity_total Findings by severity`);
     lines.push('# TYPE sentinel_findings_severity_total counter');
-    lines.push(`sentinel_findings_severity_total{severity="${sev}"} ${metrics.findings_by_severity[sev]}`);
+    lines.push(
+      `sentinel_findings_severity_total{severity="${sev}"} ${metrics.findings_by_severity[sev]}`,
+    );
   }
   lines.push('# HELP sentinel_rotations_total Rotations attempted');
   lines.push('# TYPE sentinel_rotations_total counter');
@@ -100,6 +102,8 @@ export async function writeProm(metrics: Metrics, filePath: string) {
   lines.push('# TYPE sentinel_ml_time_ms_total counter');
   lines.push(`sentinel_ml_time_ms_total ${metrics.ml_time_ms_total}`);
   const out = lines.join('\n') + '\n';
-  try { await fs.mkdir(path.dirname(filePath), { recursive: true }); } catch {}
+  try {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+  } catch {}
   await fs.writeFile(filePath, out, 'utf8');
 }

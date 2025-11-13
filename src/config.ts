@@ -8,17 +8,20 @@ import { z } from 'zod';
 // Zod schema for pattern validation
 const PatternDefSchema = z.object({
   name: z.string().min(1, 'Pattern name cannot be empty'),
-  regex: z.string().min(1, 'Pattern regex cannot be empty').refine(
-    (pattern) => {
-      try {
-        new RegExp(pattern);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    { message: 'Invalid regex pattern' }
-  ),
+  regex: z
+    .string()
+    .min(1, 'Pattern regex cannot be empty')
+    .refine(
+      (pattern) => {
+        try {
+          new RegExp(pattern);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid regex pattern' },
+    ),
   severity: z.enum(['low', 'medium', 'high']).optional(),
   enabled: z.boolean().optional(),
 });
@@ -35,7 +38,7 @@ function validatePatterns(data: unknown): PatternDef[] {
       console.error('[DEBUG] Pattern validation failed:', err);
     }
     if (err instanceof z.ZodError) {
-      const issues = err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+      const issues = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
       throw new Error(`Invalid pattern configuration: ${issues}`);
     }
     throw err;
@@ -49,7 +52,7 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
   const rootJson = path.join(cwd, '.secretsentinel.json');
   const defaults = path.join(cwd, 'config', 'defaults.json');
   try {
-  if (await exists(rootYaml)) {
+    if (await exists(rootYaml)) {
       const c = await fs.readFile(rootYaml, 'utf8');
       // avoid static import so tsc doesn't require the module to be present
       let mod: any = null;
@@ -67,7 +70,7 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
         return [];
       }
     }
-  if (await exists(rootJson)) {
+    if (await exists(rootJson)) {
       const c = await fs.readFile(rootJson, 'utf8');
       const parsed = JSON.parse(c);
       if (parsed?.patterns) {
@@ -75,7 +78,7 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       }
       return [];
     }
-  if (await exists(defaults)) {
+    if (await exists(defaults)) {
       const content = await fs.readFile(defaults, 'utf8');
       const parsed = JSON.parse(content);
       if (parsed?.patterns) {
@@ -96,5 +99,10 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
 }
 
 async function exists(p: string) {
-  try { await fs.stat(p); return true; } catch { return false; }
+  try {
+    await fs.stat(p);
+    return true;
+  } catch {
+    return false;
+  }
 }

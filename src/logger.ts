@@ -25,10 +25,18 @@ export class Logger {
     }
   }
 
-  error(msg: string, meta?: Record<string, any>) { this.log('error', msg, meta); }
-  warn(msg: string, meta?: Record<string, any>) { this.log('warn', msg, meta); }
-  info(msg: string, meta?: Record<string, any>) { this.log('info', msg, meta); }
-  debug(msg: string, meta?: Record<string, any>) { this.log('debug', msg, meta); }
+  error(msg: string, meta?: Record<string, any>) {
+    this.log('error', msg, meta);
+  }
+  warn(msg: string, meta?: Record<string, any>) {
+    this.log('warn', msg, meta);
+  }
+  info(msg: string, meta?: Record<string, any>) {
+    this.log('info', msg, meta);
+  }
+  debug(msg: string, meta?: Record<string, any>) {
+    this.log('debug', msg, meta);
+  }
 }
 
 export function createLogger(opts?: { json?: boolean; level?: LogLevel }) {

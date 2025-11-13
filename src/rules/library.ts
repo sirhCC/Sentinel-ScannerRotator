@@ -9,7 +9,7 @@ export type Ruleset = {
 
 function toRule(def: RuleDef): Rule | undefined {
   try {
-    const sev = (def.severity || 'medium');
+    const sev = def.severity || 'medium';
     const re = new RegExp(def.regex, 'g');
     const severity: Severity = sev === 'low' || sev === 'high' || sev === 'medium' ? sev : 'medium';
     return { name: def.name, re, severity };
@@ -31,9 +31,21 @@ const BUILTIN_RULESETS: Record<string, Ruleset> = {
   cloud: {
     name: 'cloud',
     rules: [
-      { name: 'AWS Secret Access Key-like', regex: '(?i)aws_?secret.*?[:=]\s*[\'\"]?[A-Za-z0-9+/]{40}[\'\"]?', severity: 'high' },
-      { name: 'GCP Service Account Key fragment', regex: '"private_key_id"\s*:\s*"[a-f0-9]{32}"', severity: 'high' },
-      { name: 'Azure Connection String', regex: '(?i)DefaultEndpointsProtocol=|AccountKey=|EndpointSuffix=', severity: 'medium' },
+      {
+        name: 'AWS Secret Access Key-like',
+        regex: '(?i)aws_?secret.*?[:=]\s*[\'\"]?[A-Za-z0-9+/]{40}[\'\"]?',
+        severity: 'high',
+      },
+      {
+        name: 'GCP Service Account Key fragment',
+        regex: '"private_key_id"\s*:\s*"[a-f0-9]{32}"',
+        severity: 'high',
+      },
+      {
+        name: 'Azure Connection String',
+        regex: '(?i)DefaultEndpointsProtocol=|AccountKey=|EndpointSuffix=',
+        severity: 'medium',
+      },
     ],
   },
 };

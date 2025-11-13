@@ -2,7 +2,17 @@
 import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'examples/**', '*.mjs', 'tmp-*.mjs', 'tmp-*/**', '.sentinel_tmp*/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'examples/**',
+      '*.mjs',
+      'tmp-*.mjs',
+      'tmp-*/**',
+      '.sentinel_tmp*/**',
+    ],
+  },
 
   // Type-checked rules for source files only
   ...tseslint.config({
@@ -32,8 +42,8 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/require-await': 'off',
-  '@typescript-eslint/no-require-imports': 'off',
-  'prefer-rest-params': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      'prefer-rest-params': 'off',
     },
   }),
 ];

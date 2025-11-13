@@ -18,7 +18,10 @@ describe('rules with severity and entropy', () => {
     process.env.SENTINEL_ENTROPY = 'true';
     const tmp = 'test-entropy.txt';
     // 48-char base64-ish random-like string
-    fs.writeFileSync(tmp, 'maybe secret: QWxhZGRpbjpvcGVuIHNlc2FtZQ== Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MDEy');
+    fs.writeFileSync(
+      tmp,
+      'maybe secret: QWxhZGRpbjpvcGVuIHNlc2FtZQ== Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MDEy',
+    );
     const res = await scanFile(tmp);
     fs.unlinkSync(tmp);
     process.env.SENTINEL_ENTROPY = prev;

@@ -42,10 +42,12 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
       // fallback: try copying the temp file into place (handles cross-device/FS issues)
       try {
         await fs.copyFile(tmpPath, filePath);
-        try { await fs.unlink(tmpPath); } catch {}
+        try {
+          await fs.unlink(tmpPath);
+        } catch {}
       } catch {
-          throw renameErr;
-        }
+        throw renameErr;
+      }
     }
     return { success: true, backupPath };
   } catch (e: any) {
@@ -54,12 +56,12 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
       if (backupMade) {
         await fs.copyFile(backupPath, filePath);
       }
-  } catch {
+    } catch {
       // ignore rollback failure
     }
     try {
       await fs.unlink(tmpPath);
-  } catch {
+    } catch {
       // ignore
     }
     return { success: false, error: e?.message ?? String(e) };

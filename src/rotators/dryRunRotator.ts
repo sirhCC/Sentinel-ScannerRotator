@@ -1,8 +1,11 @@
-import { Rotator, Finding } from "../types.js";
+import { Rotator, Finding } from '../types.js';
 
 export const dryRunRotator: Rotator = {
-  name: "dry-run",
+  name: 'dry-run',
   async rotate(finding: Finding) {
-    return { success: true, message: `Would rotate ${finding.match} in ${finding.filePath}:${finding.line}` };
+    return {
+      success: true,
+      message: `Would rotate ${finding.match} in ${finding.filePath}:${finding.line}`,
+    };
   },
 };

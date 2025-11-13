@@ -5,5 +5,5 @@ export const example = {
   async rotate(finding) {
     // do nothing, just report
     return { success: true, message: `example would handle: ${finding.filePath}:${finding.line}` };
-  }
+  },
 };

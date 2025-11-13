@@ -6,7 +6,7 @@ import fs from 'fs';
 describe('scanner', () => {
   it('finds aws key in sample text', async () => {
     const tmp = 'test-sample.txt';
-  fs.writeFileSync(tmp, 'here is a key AKIAABCDEFGHIJKLMNOP in a file');
+    fs.writeFileSync(tmp, 'here is a key AKIAABCDEFGHIJKLMNOP in a file');
     const res = await scanFile(tmp);
     if (res.length === 0) {
       const p = await loadPatterns();

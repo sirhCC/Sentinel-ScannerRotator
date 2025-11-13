@@ -27,4 +27,3 @@ All notable changes to this project will be documented in this file.
 ### Tests
 
 - Expanded test suite to cover policy semantics, CLI min severity, and guardrails; all tests pass.
-

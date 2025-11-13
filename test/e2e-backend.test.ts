@@ -9,7 +9,9 @@ describe('e2e backend rotator (file provider)', () => {
     const file = path.join(repo, 's.txt');
     const uniqueTmp = `.sentinel_tmp_${Date.now()}_${Math.random()}`;
     const secretsPath = path.join(process.cwd(), `.sentinel_secrets_e2e_${Date.now()}.json`);
-    try { fs.mkdirSync(repo); } catch {}
+    try {
+      fs.mkdirSync(repo);
+    } catch {}
     fs.writeFileSync(file, 'before AKIAABCDEFGHIJKLMNOP after');
 
     process.env.SENTINEL_TMP_DIR = uniqueTmp;
@@ -25,9 +27,15 @@ describe('e2e backend rotator (file provider)', () => {
     expect(values).toContain('AKIAABCDEFGHIJKLMNOP');
 
     // cleanup
-    try { fs.rmSync(uniqueTmp, { recursive: true, force: true }); } catch {}
-    try { fs.unlinkSync(secretsPath); } catch {}
-    try { fs.rmSync(repo, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(uniqueTmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(secretsPath);
+    } catch {}
+    try {
+      fs.rmSync(repo, { recursive: true, force: true });
+    } catch {}
     delete process.env.SENTINEL_TMP_DIR;
     delete process.env.SENTINEL_BACKEND;
     delete process.env.SENTINEL_BACKEND_FILE;
