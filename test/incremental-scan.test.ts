@@ -98,7 +98,7 @@ describe('incremental scanning', () => {
     const { scanPath } = await import('../src/scanner.js');
     const cachePath = path.join(tmpDir, '.cache.json');
 
-    // First scan
+    // First scan to populate cache
     const findings1 = await scanPath(tmpDir, [], tmpDir, {
       cachePath,
       incremental: true,
@@ -109,26 +109,21 @@ describe('incremental scanning', () => {
     // Wait for cache to be fully written
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Add new file with secret (untracked)
+    // Add new file with secret and commit it (changed file, not untracked)
     await fs.writeFile(path.join(tmpDir, 'file2.txt'), 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE');
+    await execFileAsync('git', ['add', 'file2.txt'], { cwd: tmpDir });
+    await execFileAsync('git', ['commit', '-m', 'add secret file'], { cwd: tmpDir });
 
-    // Small delay to ensure filesystem/git sees the file
+    // Wait for git commit to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Debug: Check git status before scan
-    const { getChangedFiles } = await import('../src/gitIntegration.js');
-    const gitDiff = await getChangedFiles({ repoPath: tmpDir });
-    console.log('[TEST] Git changed files:', gitDiff.changedFiles);
-    console.log('[TEST] Is git repo:', gitDiff.isGitRepo);
-
-    // Second scan: should detect new file
+    // Second scan: should detect the newly committed file compared to first scan's cache
+    // Use git base to compare against the first commit
     const findings2 = await scanPath(tmpDir, [], tmpDir, {
       cachePath,
       incremental: true,
+      gitBase: 'HEAD~1', // Compare against parent commit
     });
-
-    console.log('[TEST] findings2.length:', findings2.length);
-    console.log('[TEST] findings2:', findings2);
 
     expect(findings2.length).toBeGreaterThan(0);
     expect(findings2.some((f) => f.filePath.includes('file2.txt'))).toBe(true);
