@@ -155,7 +155,17 @@ export async function runCli(
         'with --fail-on-findings: fail if LOW severity findings exceed N',
         (v) => parseInt(v, 10),
       )
-      .option('--min-severity <sev>', 'minimum severity for threshold counting (low|medium|high)');
+      .option('--min-severity <sev>', 'minimum severity for threshold counting (low|medium|high)')
+      .option(
+        '--incremental',
+        'enable incremental scanning (only scan files changed in git; requires --cache)',
+        false,
+      )
+      .option(
+        '--no-incremental',
+        'disable automatic incremental scanning even when in git repo with cache',
+      )
+      .option('--git-base <ref>', 'git base ref for incremental scanning (default: HEAD)');
 
     // Add version from package.json if available
     try {
@@ -368,7 +378,12 @@ export async function runCli(
     const envScanConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
     const scanConc = opts.scanConcurrency ?? (isNaN(envScanConc) ? undefined : envScanConc);
     const cachePath = opts.cache || process.env.SENTINEL_CACHE;
-    const findings = await scanPath(target, extraIg, baseDir, { concurrency: scanConc, cachePath });
+    const findings = await scanPath(target, extraIg, baseDir, {
+      concurrency: scanConc,
+      cachePath,
+      incremental: opts.incremental,
+      gitBase: opts.gitBase,
+    });
     logger.info(`Found ${findings.length} findings.`);
     m.findings_total = findings.length;
     for (const f of findings) {

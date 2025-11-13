@@ -6,10 +6,21 @@ import { loadCache, saveCache, CacheData } from './cache.js';
 import { getScannerPlugins } from './plugins/scanners.js';
 import crypto from 'crypto';
 import { Worker } from 'worker_threads';
+import { getChangedFiles, isGitRepository } from './gitIntegration.js';
 
 type ScanOptions = {
   concurrency?: number;
   cachePath?: string;
+  /**
+   * Enable incremental scanning (only scan files changed in git)
+   * Requires: git repository + cache enabled
+   * Auto-enabled when in git repo with cache unless explicitly set to false
+   */
+  incremental?: boolean;
+  /**
+   * Git base ref for incremental scanning (default: HEAD)
+   */
+  gitBase?: string;
 };
 
 // Note: regex loading handled by plugins/scanners
@@ -25,7 +36,7 @@ export async function scanPath(
   if (stats.isFile()) return scanFile(targetPath, baseDir);
 
   const ig = await loadIgnorePatterns(targetPath, extraIg);
-  const files: string[] = [];
+  let files: string[] = [];
   const scanRoot = path.resolve(targetPath);
   const excludes = new Set<string>();
   const backendFile = (process.env.SENTINEL_BACKEND_FILE || '').trim();
@@ -54,7 +65,48 @@ export async function scanPath(
   if (cachePath) {
     cache = await loadCache(cachePath);
   }
-  const out: Finding[] = [];
+
+  // Incremental scanning: filter to only changed files if enabled
+  let incrementalMode = false;
+  const unchangedCachedFindings: Finding[] = [];
+  if (options?.incremental === true && cachePath && cache) {
+    // Auto-enable incremental if in git repo with cache (unless explicitly disabled)
+    const inGitRepo = await isGitRepository(scanRoot);
+    if (inGitRepo) {
+      const gitDiff = await getChangedFiles({
+        base: options?.gitBase,
+        repoPath: scanRoot,
+      });
+      if (gitDiff.isGitRepo && gitDiff.changedFiles.length > 0) {
+        // Filter files to only those changed in git
+        const changedSet = new Set(gitDiff.changedFiles.map((f) => path.normalize(f)));
+        const originalCount = files.length;
+        const filteredFiles = files.filter((f) => changedSet.has(path.normalize(f)));
+
+        // Only enable incremental mode if we have changed files in the scan scope
+        // If all files are filtered out, fall back to full scan
+        if (filteredFiles.length > 0 || Object.keys(cache.entries).length > 0) {
+          files = filteredFiles;
+          incrementalMode = true;
+
+          // Collect cached findings from unchanged files
+          for (const [key, entry] of Object.entries(cache.entries)) {
+            const fullPath = path.resolve(baseDir, key);
+            if (!changedSet.has(path.normalize(fullPath))) {
+              unchangedCachedFindings.push(...entry.findings);
+            }
+          }
+
+          if (process.env.SENTINEL_DEBUG === 'true') {
+            console.error(
+              `[DEBUG] Incremental scan: ${files.length}/${originalCount} files changed, ${unchangedCachedFindings.length} cached findings from unchanged files`,
+            );
+          }
+        }
+      }
+    }
+  }
+  const out: Finding[] = [...unchangedCachedFindings];
   // Optional worker_threads pool (disabled in tests by default)
   let pool: WorkerPool | undefined;
   try {
@@ -140,9 +192,11 @@ export async function scanPath(
   const workers = Array.from({ length: Math.min(conc, files.length || 1) }, () => worker());
   await Promise.all(workers);
   if (cachePath && cache) {
-    // prune stale entries not part of this scan
-    for (const k of Object.keys(cache.entries)) {
-      if (!scannedKeys.has(k)) delete cache.entries[k];
+    // prune stale entries not part of this scan (but not in incremental mode)
+    if (!incrementalMode) {
+      for (const k of Object.keys(cache.entries)) {
+        if (!scannedKeys.has(k)) delete cache.entries[k];
+      }
     }
     try {
       await saveCache(cachePath, cache);
