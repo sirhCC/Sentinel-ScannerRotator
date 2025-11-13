@@ -1,0 +1,63 @@
+# Source files (compiled to dist/)
+src/
+tsconfig.json
+
+# Tests
+test/
+*.test.ts
+*.test.js
+vitest.config.ts
+
+# Development files
+.vscode/
+.github/
+.git/
+.gitignore
+.gitattributes
+
+# Build artifacts and temp files
+.sentinel_tmp/
+tmp-*
+*.log
+*.tgz
+
+# Development dependencies
+node_modules/
+.npm/
+.eslintcache
+
+# Documentation that's not needed in package
+PRIORITY_TASKS.md
+CHANGELOG.md
+.markdownlint.json
+.prettierrc.json
+.prettierignore
+
+# CI/CD
+.github/workflows/
+dependabot.yml
+
+# Linting and formatting
+eslint.config.js
+.eslintrc.cjs
+
+# Debug and example files
+debug-run.mjs
+try-ml-file.mjs
+tmp-ml-file-hook-module2.mjs
+examples/
+
+# Backup files
+*.backup
+*.bak
+README.md.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+*.swp
+*.swo
+*~
+.idea/

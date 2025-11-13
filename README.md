@@ -80,6 +80,19 @@ _A production-grade CLI tool for scanning repositories to detect secrets and saf
 
 ### Installation
 
+#### Option 1: Install from npm (Recommended)
+
+```powershell
+# Install globally
+npm install -g secret-sentinel-scanner-rotator
+
+# Verify installation
+sentinel --version
+sentinel --help
+```
+
+#### Option 2: Install from source
+
 ```powershell
 # Clone the repository
 git clone https://github.com/sirhCC/Sentinel-ScannerRotator.git
@@ -90,9 +103,30 @@ npm install
 
 # Build the project
 npm run build
+
+# Test locally (without global install)
+npm start -- . --rotator dry-run
 ```
 
 ### Basic Usage
+
+#### If installed globally:
+
+```powershell
+# Scan a directory (dry-run mode - no changes)
+sentinel ./my-project --rotator dry-run
+
+# Scan with detailed output
+sentinel ./my-project --rotator dry-run --log-level debug
+
+# List available rotators
+sentinel --list-rotators
+
+# View runtime configuration
+sentinel --show-runtime-info
+```
+
+#### If running from source:
 
 ```powershell
 # Scan a directory (dry-run mode - no changes)

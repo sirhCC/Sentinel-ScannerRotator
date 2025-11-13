@@ -4,22 +4,63 @@
   "description": "A small TypeScript CLI that scans files for secret-like patterns and supports pluggable rotators (dry-run/apply).",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "sentinel": "./dist/cli.js",
+    "secret-sentinel": "./dist/cli.js"
+  },
+  "files": [
+    "dist/**/*",
+    "config/**/*",
+    "scripts/verify-install.js",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "!README.md.backup",
+    "!**/*.test.js",
+    "!**/*.test.ts"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirhCC/Sentinel-ScannerRotator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sirhCC/Sentinel-ScannerRotator/issues"
+  },
+  "homepage": "https://github.com/sirhCC/Sentinel-ScannerRotator#readme",
   "scripts": {
     "build": "tsc -p .",
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
     "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src test --ext .ts",
     "format": "prettier --write .",
-    "clean": "rimraf dist .sentinel_tmp tmp-demo tmp-try tmp-config.txt"
+    "clean": "rimraf dist .sentinel_tmp tmp-demo tmp-try tmp-config.txt",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "prepack": "npm run build",
+    "postinstall": "node scripts/verify-install.js || exit 0",
+    "version": "npm run format && git add -A",
+    "postversion": "git push && git push --tags",
+    "pack:test": "npm pack && echo '\nTest installation with: npm install -g ./secret-sentinel-scanner-rotator-*.tgz'"
   },
   "keywords": [
     "secret",
     "scanner",
     "rotator",
-    "typescript"
+    "typescript",
+    "security",
+    "secret-management",
+    "secret-detection",
+    "aws-secrets-manager",
+    "hashicorp-vault",
+    "cli",
+    "devops",
+    "devsecops"
   ],
-  "author": "",
+  "author": "sirhCC",
   "license": "MIT",
   "devDependencies": {
     "@types/jszip": "^3.4.1",
