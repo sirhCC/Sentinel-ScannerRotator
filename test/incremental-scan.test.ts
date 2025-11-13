@@ -106,6 +106,9 @@ describe('incremental scanning', () => {
     // Add new file with secret (untracked)
     await fs.writeFile(path.join(tmpDir, 'file2.txt'), 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE');
 
+    // Small delay to ensure filesystem/git sees the file
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     // Second scan: should detect new file
     const findings2 = await scanPath(tmpDir, [], tmpDir, {
       cachePath,
