@@ -1,5 +1,41 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Environment and secrets
 .env
+.env.local
+.env.*.local
+.sentinel_secrets.json
+.sentinel_secrets.json.history.ndjson
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
 .sentinel_tmp/
+tmp-*/
+*.tmp
+*.bak
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache
+.sentinel_cache
+.sentinel_rulesets/
+
+# Debug files
+debug-*.mjs
+try-*.mjs

@@ -8,6 +8,7 @@ import zlib from 'zlib';
 import readline from 'readline';
 import { Finding, ScanResult } from '../types.js';
 import { newMetrics } from '../metrics.js';
+import { getLogger } from '../logger.js';
 import { loadRules, type Rule } from '../rules/ruleset.js';
 import { findHighEntropyTokens } from '../rules/entropy.js';
 
@@ -74,7 +75,7 @@ async function loadMlHooks(spec: string): Promise<MlHooks> {
       return { line, file } as MlHooks;
     } catch (err) {
       if (process.env.SENTINEL_DEBUG === 'true') {
-        console.error('[DEBUG] Failed to load ML hook from', spec, err);
+        getLogger().debug('Failed to load ML hook', { spec, error: String(err) });
       }
       return {} as MlHooks;
     }

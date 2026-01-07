@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createRequire } from 'module';
 import { z } from 'zod';
+import { getLogger } from './logger.js';
 
 // Zod schema for policy validation
 const PolicySchema = z.object({
@@ -26,7 +27,7 @@ function validatePolicy(data: unknown): Policy {
     return PolicySchema.parse(data);
   } catch (err) {
     if (process.env.SENTINEL_DEBUG === 'true') {
-      console.error('[DEBUG] Policy validation failed:', err);
+      getLogger().debug('Policy validation failed', { error: String(err) });
     }
     if (err instanceof z.ZodError) {
       const issues = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
@@ -77,7 +78,7 @@ export async function loadPolicy(baseDir?: string): Promise<Policy | undefined> 
       throw err;
     }
     if (process.env.SENTINEL_DEBUG === 'true') {
-      console.error('[DEBUG] Failed to load policy:', err);
+      getLogger().debug('Failed to load policy', { error: String(err) });
     }
   }
   return undefined;

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createRequire } from 'module';
 import { z } from 'zod';
+import { getLogger } from './logger.js';
 // use dynamic import for js-yaml to avoid static type resolution failures when
 // the package's types are not installed in the environment.
 
@@ -35,7 +36,7 @@ function validatePatterns(data: unknown): PatternDef[] {
     return PatternsArraySchema.parse(data);
   } catch (err) {
     if (process.env.SENTINEL_DEBUG === 'true') {
-      console.error('[DEBUG] Pattern validation failed:', err);
+      getLogger().debug('Pattern validation failed', { error: String(err) });
     }
     if (err instanceof z.ZodError) {
       const issues = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
@@ -92,7 +93,7 @@ export async function loadPatterns(baseDir?: string): Promise<PatternDef[]> {
       throw err;
     }
     if (process.env.SENTINEL_DEBUG === 'true') {
-      console.error('[DEBUG] Failed to load patterns:', err);
+      getLogger().debug('Failed to load patterns', { error: String(err) });
     }
   }
   return [];

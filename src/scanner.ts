@@ -7,6 +7,8 @@ import { getScannerPlugins } from './plugins/scanners.js';
 import crypto from 'crypto';
 import { Worker } from 'worker_threads';
 import { getChangedFiles, isGitRepository } from './gitIntegration.js';
+import { getLogger } from './logger.js';
+import { DEFAULT_SCAN_CONCURRENCY, MIN_CONCURRENCY, DEFAULT_CACHE_MODE } from './constants.js';
 
 type ScanOptions = {
   concurrency?: number;
@@ -25,6 +27,20 @@ type ScanOptions = {
 
 // Note: regex loading handled by plugins/scanners
 
+/**
+ * Scan a file or directory for secret findings
+ *
+ * @param targetPath - Path to file or directory to scan
+ * @param extraIg - Additional ignore patterns to apply
+ * @param baseDir - Base directory for relative path resolution
+ * @param options - Scan configuration options
+ * @returns Promise resolving to array of findings
+ *
+ * @example
+ * ```typescript
+ * const findings = await scanPath('./src', ['*.test.ts'], '/project');
+ * ```
+ */
 export async function scanPath(
   targetPath: string,
   extraIg?: string[],
@@ -57,11 +73,14 @@ export async function scanPath(
     excludes,
   );
   const envConc = Number(process.env.SENTINEL_SCAN_CONCURRENCY);
-  const conc = Math.max(1, options?.concurrency ?? (isNaN(envConc) ? undefined : envConc) ?? 8);
+  const conc = Math.max(
+    MIN_CONCURRENCY,
+    options?.concurrency ?? (isNaN(envConc) ? undefined : envConc) ?? DEFAULT_SCAN_CONCURRENCY,
+  );
   // Load cache if configured
   const cachePath = options?.cachePath || process.env.SENTINEL_CACHE || '';
   let cache: CacheData | undefined;
-  const cacheMode = (process.env.SENTINEL_CACHE_MODE || 'mtime').toLowerCase();
+  const cacheMode = (process.env.SENTINEL_CACHE_MODE || DEFAULT_CACHE_MODE).toLowerCase();
   if (cachePath) {
     cache = await loadCache(cachePath);
   }
@@ -98,8 +117,8 @@ export async function scanPath(
           }
 
           if (process.env.SENTINEL_DEBUG === 'true') {
-            console.error(
-              `[DEBUG] Incremental scan: ${files.length}/${originalCount} files changed, ${unchangedCachedFindings.length} cached findings from unchanged files`,
+            getLogger().debug(
+              `Incremental scan: ${files.length}/${originalCount} files changed, ${unchangedCachedFindings.length} cached findings from unchanged files`,
             );
           }
         }
@@ -184,7 +203,7 @@ export async function scanPath(
       } catch (err) {
         // File scan failed, skip this file and continue
         if (process.env.SENTINEL_DEBUG === 'true') {
-          console.error('[DEBUG] Failed to scan file:', file, err);
+          getLogger().debug('Failed to scan file', { file, error: String(err) });
         }
       }
     }
@@ -202,13 +221,21 @@ export async function scanPath(
       await saveCache(cachePath, cache);
     } catch (err) {
       if (process.env.SENTINEL_DEBUG === 'true') {
-        console.error('[DEBUG] Failed to save cache:', err);
+        getLogger().debug('Failed to save cache', { error: err });
       }
     }
   }
   return out;
 }
 
+/**
+ * Recursively collect all scannable files in a directory
+ * @param dir - Directory to walk
+ * @param root - Root directory for relative path calculation
+ * @param ig - Ignore pattern matcher
+ * @param files - Accumulator array for discovered files
+ * @param excludes - Set of absolute paths to exclude
+ */
 async function walkDirCollect(
   dir: string,
   root: string,
@@ -230,6 +257,12 @@ async function walkDirCollect(
   }
 }
 
+/**
+ * Scan a single file for secret findings
+ * @param filePath - Path to the file to scan
+ * @param baseDir - Base directory for relative path resolution
+ * @returns Promise resolving to array of findings
+ */
 export async function scanFile(filePath: string, baseDir?: string): Promise<Finding[]> {
   // Choose a scanner plugin based on file type; fallback to text
   const plugins = getScannerPlugins();

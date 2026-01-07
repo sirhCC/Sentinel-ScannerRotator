@@ -1,2 +1,0 @@
-export function analyzeFile(lines, ctx){ const content = lines.join('
-'); if(content.includes('BEGIN PRIVATE KEY') && content.includes('END PRIVATE KEY')) return [{ token: 'PRIVATE_KEY_BLOCK', index: 0, ruleName: 'ML-File', severity: 'high' }]; }

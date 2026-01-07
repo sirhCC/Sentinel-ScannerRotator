@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import { Rotator, Finding } from '../types.js';
 import { safeUpdate } from '../fileSafeUpdate.js';
 import { withRetry, maskError } from '../errorHandling.js';
+import { validateSecretKey } from '../validation.js';
 
 type Provider = {
   name: string;
@@ -11,13 +12,33 @@ type Provider = {
   delete?: (key: string) => Promise<void>;
 };
 
+/**
+ * Sanitize a string to contain only safe characters for use as a secret key
+ * @param s - String to sanitize
+ * @returns Sanitized string with only alphanumeric, underscore, dash, and dot characters
+ */
 function sanitize(s: string) {
   return s.replace(/[^a-zA-Z0-9_.-]/g, '_');
 }
 
+/**
+ * Generate a unique secret key from a finding
+ * @param finding - The finding to generate a key for
+ * @param ts - Timestamp to include in the key
+ * @returns Generated key string
+ * @throws Error if the generated key is invalid
+ */
 function genKey(finding: Finding, ts: number) {
   const base = sanitize(path.basename(finding.filePath));
-  return `${base}_${finding.line}_${ts}`;
+  const key = `${base}_${finding.line}_${ts}`;
+
+  // Validate the generated key
+  const validation = validateSecretKey(key);
+  if (!validation.valid) {
+    throw new Error(`Generated invalid secret key: ${validation.error}`);
+  }
+
+  return key;
 }
 
 async function ensureDir(p: string) {
@@ -86,7 +107,7 @@ async function awsProvider(): Promise<Provider> {
     const mod: any = await import(awsSdkModule);
     const { SecretsManagerClient, CreateSecretCommand, PutSecretValueCommand } = mod;
     const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-    
+
     // Try to create client - will fail if credentials not configured
     let client: any;
     try {
@@ -142,15 +163,15 @@ async function awsProvider(): Promise<Provider> {
     };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    
+
     // Check if it's a module not found error
     if (err.message.includes('Cannot find module') || err.message.includes('Cannot find package')) {
       throw new Error(
-        "AWS Secrets Manager SDK not available. Install with: npm install @aws-sdk/client-secrets-manager\n" +
-        "Or use file backend: set SENTINEL_BACKEND=file",
+        'AWS Secrets Manager SDK not available. Install with: npm install @aws-sdk/client-secrets-manager\n' +
+          'Or use file backend: set SENTINEL_BACKEND=file',
       );
     }
-    
+
     // Re-throw other errors (credentials, network, etc.)
     throw err;
   }

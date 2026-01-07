@@ -1,5 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { validateFilePath } from './validation.js';
+import { toError } from './types/errors.js';
 
 function resolveTmpDir() {
   const fromEnv = process.env.SENTINEL_TMP_DIR;
@@ -21,7 +23,19 @@ function sanitizeRel(rel: string) {
   return rel.replace(/[\\/]/g, '_');
 }
 
+/**
+ * Safely update a file with atomic write and automatic backup/rollback
+ * @param filePath - Absolute path to the file to update
+ * @param transform - Function that transforms the file content
+ * @returns Result object with success status and backup path or error message
+ */
 export async function safeUpdate(filePath: string, transform: (content: string) => string) {
+  // Validate file path to prevent directory traversal
+  const validation = validateFilePath(filePath);
+  if (!validation.valid) {
+    return { success: false, error: `Invalid file path: ${validation.error}` };
+  }
+
   const TMP_DIR = resolveTmpDir();
   await ensureTmpDir(TMP_DIR);
   const rel = path.relative(process.cwd(), filePath) || path.basename(filePath);
@@ -38,7 +52,7 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
     await fs.writeFile(tmpPath, updated, 'utf8');
     try {
       await fs.rename(tmpPath, filePath);
-    } catch (renameErr: any) {
+    } catch (renameErr) {
       // fallback: try copying the temp file into place (handles cross-device/FS issues)
       try {
         await fs.copyFile(tmpPath, filePath);
@@ -50,7 +64,8 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
       }
     }
     return { success: true, backupPath };
-  } catch (e: any) {
+  } catch (e) {
+    const error = toError(e);
     // attempt rollback
     try {
       if (backupMade) {
@@ -64,6 +79,6 @@ export async function safeUpdate(filePath: string, transform: (content: string) 
     } catch {
       // ignore
     }
-    return { success: false, error: e?.message ?? String(e) };
+    return { success: false, error: error.message };
   }
 }
