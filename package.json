@@ -74,7 +74,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/jszip": "^3.4.1",
-    "@types/node": "^20.19.32",
+    "@types/node": "^20.19.33",
     "@types/tar-stream": "^3.1.2",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.54.0",
